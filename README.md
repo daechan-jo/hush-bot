@@ -1,6 +1,7 @@
 # Hush-BOT: ChannelON-Coupang 품절 상품 자동 삭제 및 알림 시스템
 
-이 프로젝트는 **Coupang**에 등록된 **ChannelON**의 상품 중 품절된 상품을 자동으로 탐지하고 하위 아이템을 판매 중지한 후 최종 상품을 삭제하는 기능을 제공합니다. 삭제된 상품 정보는 관리자에게 **이메일**로 알림됩니다. 이 시스템은 **NestJS**, **Puppeteer**, 및 **Nodemailer**를 사용하여 구현되었습니다.
+이 프로젝트는 **Coupang**에 등록된 **ChannelON**의 상품 중 품절된 상품을 자동으로 탐지하고 하위 아이템을 판매 중지한 후 최종 상품을 삭제하는 기능을 제공합니다. 삭제된 상품 정보는 관리자에게
+**이메일**로 알림됩니다. 이 시스템은 **NestJS**, **Puppeteer**, 및 **Nodemailer**를 사용하여 구현되었습니다.
 
 ## 주요 기능
 
@@ -11,7 +12,7 @@
 ## 동작 과정
 
 1. **크롤링 및 품절 상품 탐지**:
-	- `AppService`는 10분 간격으로 On채널 사이트를 크롤링하여 최근 품절된 상품을 식별합니다.
+	- `SoldoutService`는 10분 간격으로 On채널 사이트를 크롤링하여 최근 품절된 상품을 식별합니다.
 	- 크롤링된 품절 상품 코드는 `CoupangService`로 전달됩니다.
 
 2. **Coupang API와 통신**:
@@ -54,9 +55,11 @@ npm install
 ```
 
 ### 3. 서버 실행
+
 NestJS 서버를 실행하여 크론 작업을 시작합니다.
+
 ```bash
 npm run build
-npm run start
+npm run start:prod
 ```
 

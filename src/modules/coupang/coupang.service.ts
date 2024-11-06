@@ -3,7 +3,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 
 import { ConfigService } from '@nestjs/config';
-import { MailService } from './mail.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class CoupangService {
@@ -179,13 +179,16 @@ export class CoupangService {
 
         console.log(`상품 삭제 성공 (sellerProductId: ${product.sellerProductId}):`, response.data);
 
-				setImmediate(() => {
-					this.mailService.sendDeletionEmail(product.sellerProductId, product.sellerProductName)
-						.catch(error => {
-							console.error(`비동기 메일 발송 실패 (상품명: ${product.sellerProductName}):`, error.message);
-						});
-				});
-
+        setImmediate(() => {
+          this.mailService
+            .sendDeletionEmail(product.sellerProductId, product.sellerProductName)
+            .catch((error) => {
+              console.error(
+                `비동기 메일 발송 실패 (상품명: ${product.sellerProductName}):`,
+                error.message,
+              );
+            });
+        });
       } catch (error) {
         console.error(
           `상품 삭제 실패 (sellerProductId: ${product.sellerProductId}):`,

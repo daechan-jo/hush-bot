@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
-import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import * as path from 'node:path';
-import { DataService } from './data.service';
-import { CoupangService } from './coupang.service';
-import { MailService } from './mail.service';
+import { PuppeteerModule } from './modules/auth/puppeteer.module';
+import { SoldoutModule } from './modules/soldout/soldout.module';
+import { SoldoutService } from './modules/soldout/soldout.service';
+import { DataModule } from './modules/data/data.module';
+import { CoupangModule } from './modules/coupang/coupang.module';
+import { PriceModule } from './modules/price/price.module';
+import { PriceService } from './modules/price/price.service';
 
 @Module({
   imports: [
@@ -14,13 +17,22 @@ import { MailService } from './mail.service';
       isGlobal: true,
       envFilePath: path.resolve(__dirname, '../.env'),
     }),
+    PuppeteerModule,
+    SoldoutModule,
+    DataModule,
+    CoupangModule,
+    PriceModule,
   ],
-  providers: [AppService, DataService, CoupangService, MailService],
+  providers: [],
 })
 export class AppModule {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly soldoutService: SoldoutService,
+    private readonly priceService: PriceService,
+  ) {}
 
   async onModuleInit() {
-    await this.appService.handleCron();
+    await this.soldoutService.soldOutCron();
+    // await this.priceService.autoPriceCron();
   }
 }

@@ -1,55 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import * as puppeteer from 'puppeteer';
-import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
-import { DataService } from './data.service';
-import { CoupangService } from './coupang.service';
+import { DataService } from '../data/data.service';
+import { CoupangService } from '../coupang/coupang.service';
+import { PuppeteerService } from '../auth/puppeteer.service';
 
 @Injectable()
-export class AppService {
+export class SoldoutService {
   constructor(
-    private readonly configService: ConfigService,
+    private readonly puppeteerService: PuppeteerService,
     private readonly dataService: DataService,
     private readonly coupangService: CoupangService,
   ) {}
 
-  private browser: puppeteer.Browser;
-
-  async init() {
-    this.browser = await puppeteer.launch({
-      headless: true,
-    });
-  }
-
-  async loginToSite() {
-    const page = await this.browser.newPage();
-
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.60 Safari/537.36',
-    );
-
-    // 로그인 페이지
-    await page.goto('https://www.onch3.co.kr/login/login_web.php');
-
-    // 이메일과 비밀번호 입력
-    await page.type(
-      'input[placeholder="온채널 또는 통합계정 아이디"]',
-      this.configService.get<string>('ON_CHANNEL_EMAIL'),
-    );
-    await page.type(
-      'input[placeholder="비밀번호 입력"]',
-      this.configService.get<string>('ON_CHANNEL_PASSWORD'),
-    );
-
-    // 로그인 버튼 클릭
-    await page.click('button[name="login"]');
-    await page.waitForNavigation();
-
-    return page;
-  }
-
   async crawlForNewProducts() {
-    const page = await this.loginToSite();
+    const page = await this.puppeteerService.loginToOnchSite();
 
     page.on('console', (msg) => {
       for (let i = 0; i < msg.args().length; ++i) console.log(`${i}: ${msg.args()[i]}`);
@@ -110,18 +74,14 @@ export class AppService {
     await this.coupangService.stopSaleForMatchedProducts(matchedProducts);
     await this.coupangService.deleteProducts(matchedProducts);
 
-    await this.close();
+    await this.puppeteerService.close();
   }
 
-  @Cron('0 */10 * * * *')
-  async handleCron() {
-    console.log('크롤링 작업 시작');
-    await this.init();
+  // @Cron('0 */5 * * * *')
+  async soldOutCron() {
+    console.log('품절 상품 크론: 시작');
+    await this.puppeteerService.init();
     await this.crawlForNewProducts();
-    console.log('크롤링 작업 완료');
-  }
-
-  async close() {
-    await this.browser.close();
+    console.log('품절 상품 크론: 완료');
   }
 }

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import { join } from 'path';
 import { Injectable } from '@nestjs/common';
 
-const dataFilePath = join(__dirname, '../data.json');
+const dataFilePath = join(__dirname, '../../../data.json');
 
 @Injectable()
 export class DataService {
@@ -38,8 +38,8 @@ export class DataService {
   }
 
   public setLastCronTime(date: Date): void {
-    date.setMilliseconds(0); // 밀리초 제거
-    this.data.lastCronTime = date.toISOString(); // UTC로 저장
+    date.setMilliseconds(0);
+    this.data.lastCronTime = date.toISOString();
     this.save();
   }
 
