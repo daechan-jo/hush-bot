@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { DataService } from '../data/data.service';
 import { CoupangService } from '../coupang/coupang.service';
 import { PuppeteerService } from '../auth/puppeteer.service';
+import { TaskService } from '../task/task.service';
 
 @Injectable()
 export class SoldoutService {
@@ -10,6 +11,7 @@ export class SoldoutService {
     private readonly puppeteerService: PuppeteerService,
     private readonly dataService: DataService,
     private readonly coupangService: CoupangService,
+    private readonly taskService: TaskService,
   ) {}
 
   async crawlForNewProducts() {
@@ -57,6 +59,8 @@ export class SoldoutService {
       lastCronTime ? lastCronTime.getTime() : 0,
     );
 
+    await this.puppeteerService.closeAllPages();
+
     this.dataService.setLastCronTime(new Date());
 
     console.log('품절 상품 코드', productCodes.stockProductCodes);
@@ -73,15 +77,17 @@ export class SoldoutService {
 
     await this.coupangService.stopSaleForMatchedProducts(matchedProducts);
     await this.coupangService.deleteProducts(matchedProducts);
-
-    await this.puppeteerService.close();
   }
 
-  // @Cron('0 */5 * * * *')
+  @Cron('0 */5 * * * *')
   async soldOutCron() {
-    console.log('품절 상품 크론: 시작');
-    await this.puppeteerService.init();
-    await this.crawlForNewProducts();
+    if ((await this.taskService.getRunningStatus()) === false) {
+      console.log('품절 상품 크론: 시작');
+      await this.crawlForNewProducts();
+    } else {
+      console.log();
+      return;
+    }
     console.log('품절 상품 크론: 완료');
   }
 }

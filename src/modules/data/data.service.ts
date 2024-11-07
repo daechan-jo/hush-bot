@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import { join } from 'path';
 import { Injectable } from '@nestjs/common';
 
-const dataFilePath = join(__dirname, '../../../data.json');
+const dataFilePath = join(__dirname, '../data.json');
 
 @Injectable()
 export class DataService {
@@ -16,11 +16,22 @@ export class DataService {
     if (fs.existsSync(dataFilePath)) {
       const fileData = fs.readFileSync(dataFilePath, 'utf-8');
       this.data = JSON.parse(fileData);
+    } else {
+      this.data = {
+        lastCronTime: null,
+        onchProductDetails: [],
+        coupangProductDetails: [],
+        updatedProducts: [],
+      };
     }
   }
 
   private save() {
-    fs.writeFileSync(dataFilePath, JSON.stringify(this.data, null, 2));
+    try {
+      fs.writeFileSync(dataFilePath, JSON.stringify(this.data, null, 2));
+    } catch (error) {
+      console.error('Error saving data:', error);
+    }
   }
 
   public get(key: string): any {
@@ -33,7 +44,20 @@ export class DataService {
   }
 
   public delete(key: string): void {
+    this.load();
+
     delete this.data[key];
+    this.save();
+  }
+
+  public appendToArray(key: string, value: any) {
+    this.load();
+
+    if (!Array.isArray(this.data[key])) {
+      this.data[key] = [];
+    }
+
+    this.data[key].push(value);
     this.save();
   }
 

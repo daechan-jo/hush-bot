@@ -67,6 +67,13 @@ export class PuppeteerService {
     return page;
   }
 
+  async closeAllPages() {
+    const pages = await this.browser.pages();
+    for (const page of pages) {
+      await page.close();
+    }
+  }
+
   async close() {
     await this.browser.close();
   }

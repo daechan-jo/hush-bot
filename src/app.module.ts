@@ -9,6 +9,8 @@ import { DataModule } from './modules/data/data.module';
 import { CoupangModule } from './modules/coupang/coupang.module';
 import { PriceModule } from './modules/price/price.module';
 import { PriceService } from './modules/price/price.service';
+import { PuppeteerService } from './modules/auth/puppeteer.service';
+import { TaskModule } from './modules/task/task.module';
 
 @Module({
   imports: [
@@ -22,6 +24,7 @@ import { PriceService } from './modules/price/price.service';
     DataModule,
     CoupangModule,
     PriceModule,
+    TaskModule,
   ],
   providers: [],
 })
@@ -29,10 +32,14 @@ export class AppModule {
   constructor(
     private readonly soldoutService: SoldoutService,
     private readonly priceService: PriceService,
+    private readonly puppeteerService: PuppeteerService,
   ) {}
 
   async onModuleInit() {
-    await this.soldoutService.soldOutCron();
-    // await this.priceService.autoPriceCron();
+    await this.puppeteerService.init();
+    // await this.soldoutService.soldOutCron();
+    await this.priceService.autoPriceCron();
+
+    // await this.priceService.calculateMarginAndAdjustPrices();
   }
 }
