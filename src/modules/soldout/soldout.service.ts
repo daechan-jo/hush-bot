@@ -21,8 +21,10 @@ export class SoldoutService {
       for (let i = 0; i < msg.args().length; ++i) console.log(`${i}: ${msg.args()[i]}`);
     });
 
-    await page.goto('https://www.onch3.co.kr/admin_mem_clo_list_2.php?ost=&sec=clo&ol=&npage=');
-    await page.waitForSelector('td.title_4.sub_title', { timeout: 10000 });
+    await page.goto('https://www.onch3.co.kr/admin_mem_clo_list_2.php?ost=&sec=clo&ol=&npage=', {
+      timeout: 0,
+    });
+    await page.waitForSelector('td.title_4.sub_title', { timeout: 0 });
 
     const lastCronTime = this.dataService.getLastCronTime();
     console.log('마지막 실행 시간:', lastCronTime);
@@ -57,6 +59,7 @@ export class SoldoutService {
         };
       },
       lastCronTime ? lastCronTime.getTime() : 0,
+      { timeout: 0 },
     );
 
     await this.puppeteerService.closeAllPages();

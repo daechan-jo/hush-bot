@@ -28,7 +28,7 @@ export class PuppeteerService {
     );
 
     // 로그인 페이지
-    await page.goto('https://www.onch3.co.kr/login/login_web.php');
+    await page.goto('https://www.onch3.co.kr/login/login_web.php', { timeout: 0 });
 
     // 이메일과 비밀번호 입력
     await page.type(
@@ -42,7 +42,7 @@ export class PuppeteerService {
 
     // 로그인 버튼 클릭
     await page.click('button[name="login"]');
-    await page.waitForNavigation();
+    await page.waitForNavigation({ timeout: 0 });
 
     return page;
   }
