@@ -16,6 +16,7 @@ export class PuppeteerService {
     this.browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      timeout: 0,
     });
   }
 
