@@ -41,7 +41,7 @@ export class AppModule implements OnApplicationBootstrap {
     setTimeout(async () => {
       await this.puppeteerService.init();
       // await this.priceService.autoPriceCron();
-      // await this.soldoutService.soldOutCron();
+      await this.soldoutService.soldOutCron();
     }, 100);
   }
 }
