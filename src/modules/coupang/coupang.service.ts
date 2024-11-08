@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '../mail/mail.service';
+import { DataService } from '../data/data.service';
 
 @Injectable()
 export class CoupangService {
@@ -14,6 +15,7 @@ export class CoupangService {
   constructor(
     private readonly configService: ConfigService,
     private readonly mailService: MailService,
+    private readonly dataService: DataService,
   ) {
     this.secretKey = this.configService.get<string>('COUPANG_SECRET_KEY');
     this.accessKey = this.configService.get<string>('COUPANG_ACCESS_KEY');
@@ -196,5 +198,69 @@ export class CoupangService {
         );
       }
     }
+  }
+
+  async couPangProductsPriceControl() {
+    console.log(`자동 가격 조절: 상품 가격 업데이트 시작`);
+
+    const sellerProductIds = [];
+
+    const updatedProducts = await this.dataService.get('updatedProducts');
+
+    for (const product of updatedProducts) {
+      try {
+        // sellerProductId로 쿠팡 상품 상세 정보 가져오기
+        const productDetail = await this.fetchCoupangProductDetails(product.sellerProductId);
+
+        // items 배열에서 각 vendorItemId를 추출하여 가격 업데이트
+        if (productDetail && productDetail.data && productDetail.data.items) {
+          const items = productDetail.data.items;
+
+          for (const item of items) {
+            const vendorItemId = item.vendorItemId;
+
+            const priceUpdatePath = `/v2/providers/seller_api/apis/api/v1/marketplace/vendor-items/${vendorItemId}/prices/${product.newPrice}`;
+
+            const { authorization, datetime } = await this.createHmacSignature(
+              'PUT',
+              priceUpdatePath,
+              '',
+              false,
+            );
+
+            try {
+              await axios.put(`https://api-gateway.coupang.com${priceUpdatePath}`, null, {
+                headers: {
+                  Authorization: authorization,
+                  'Content-Type': 'application/json;charset=UTF-8',
+                  'X-Coupang-Date': datetime,
+                },
+              });
+              sellerProductIds.push(product.sellerProductId);
+            } catch (updateError) {
+              console.error(
+                `가격 업데이트 오류 (vendorItemId: ${vendorItemId}):`,
+                updateError.response?.data || updateError.message,
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error(
+          `상품 상세 조회 오류 (sellerProductId: ${product.sellerProductId}):`,
+          error.message,
+        );
+      }
+    }
+
+    setImmediate(() => {
+      this.mailService.sendUpdateEmail(sellerProductIds).catch((error) => {
+        console.error(`비동기 메일 발송 실패 (상품 업데이트):`, error.message);
+      });
+    });
+
+    // this.dataService.delete('updatedProducts');
+
+    console.log(`자동 가격 조절: 상품 가격 업데이트 완료`);
   }
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PuppeteerService } from '../auth/puppeteer.service';
+import { PuppeteerService } from '../puppeteer/puppeteer.service';
 import { DataService } from '../data/data.service';
 import { CoupangService } from '../coupang/coupang.service';
 import { Page } from 'puppeteer';
@@ -17,6 +17,8 @@ export class PriceService {
 
   async crawlSaleProducts() {
     const onchPage = await this.puppeteerService.loginToOnchSite();
+
+    console.log('자동 가격 조절: 온채널 판매상품 리스트업 시작');
 
     onchPage.on('console', (msg) => {
       for (let i = 0; i < msg.args().length; ++i) console.log(`${i}: ${msg.args()[i]}`);
@@ -52,12 +54,13 @@ export class PriceService {
       currentPage++;
     }
 
-    console.log('자동 가격 조절: 온채널 판매상품 리스트업 완료');
+    console.log(`자동 가격 조절: 온채널 판매상품 리스트업 완료 (${allProductIds.length} 개)`);
     await this.crawlOnchDetailProducts(onchPage, allProductIds);
   }
 
   async crawlOnchDetailProducts(onchPage: Page, allProductIds: string[]) {
     const detailsBatch = [];
+    console.log('자동 가격 조절: 온채널 판매상품 상세정보 크롤링 시작');
 
     for (const productId of allProductIds) {
       await onchPage.goto(
@@ -119,83 +122,91 @@ export class PriceService {
   }
 
   async crawlCoupangDetailProducts(onchPage: Page) {
+    console.log('자동 가격 조절: 쿠팡 크롤링 시작');
+
     const coupangPage = await this.puppeteerService.loginToCoupangSite(onchPage);
 
     let isLastPage = false;
     let currentPage = 1;
 
-    while (!isLastPage) {
-      console.log('자동 가격 조절: 쿠팡 크롤링 시작 - 페이지', currentPage);
+    try {
+      while (!isLastPage) {
+        console.log('자동 가격 조절: 쿠팡 크롤링 - 페이지', currentPage);
 
-      await coupangPage.goto(
-        `https://wing.coupang.com/vendor-inventory/list?searchKeywordType=ALL&searchKeywords=&salesMethod=ALL&productStatus=ALL&stockSearchType=ALL&shippingFeeSearchType=ALL&displayCategoryCodes=&listingStartTime=null&listingEndTime=null&saleEndDateSearchType=ALL&bundledShippingSearchType=ALL&displayDeletedProduct=false&shippingMethod=ALL&exposureStatus=ALL&locale=ko_KR&sortMethod=SORT_BY_ITEM_LEVEL_UNIT_SOLD&countPerPage=50&page=${currentPage}`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+        await coupangPage.goto(
+          `https://wing.coupang.com/vendor-inventory/list?searchKeywordType=ALL&searchKeywords=&salesMethod=ALL&productStatus=ALL&stockSearchType=ALL&shippingFeeSearchType=ALL&displayCategoryCodes=&listingStartTime=null&listingEndTime=null&saleEndDateSearchType=ALL&bundledShippingSearchType=ALL&displayDeletedProduct=false&shippingMethod=ALL&exposureStatus=ALL&locale=ko_KR&sortMethod=SORT_BY_ITEM_LEVEL_UNIT_SOLD&countPerPage=50&page=${currentPage}`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      await coupangPage.evaluate(async () => {
-        const scrollStep = 100; // 한 번에 스크롤할 픽셀 수
-        const scrollDelay = 100; // 스크롤 간 딜레이(ms)
+        await coupangPage.evaluate(async () => {
+          const scrollStep = 100; // 한 번에 스크롤할 픽셀 수
+          const scrollDelay = 100; // 스크롤 간 딜레이(ms)
 
-        for (let y = 0; y < document.body.scrollHeight; y += scrollStep) {
-          window.scrollBy(0, scrollStep);
-          await new Promise((resolve) => setTimeout(resolve, scrollDelay)); // 각 스크롤 간격마다 대기
-        }
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-
-      console.log('모든 상품 로드 대기 중...');
-      const productsOnPage = await coupangPage.evaluate(() => {
-        const getPrice = (text: string) => text?.replace(/[^0-9]/g, '') || null;
-
-        // 모든 상품 행을 순회하며 데이터 추출
-        return Array.from(document.querySelectorAll('tr.inventory-line')).map((row) => {
-          const ipContentDiv = row.querySelector('.ip-right .ip-content div:nth-child(3)');
-          const sellerProductId = ipContentDiv
-            ? ipContentDiv.textContent.replace(/[^0-9]/g, '')
-            : null;
-
-          const productCode =
-            row.querySelector('.ip-title')?.textContent?.trim().split(' ')[0] || null;
-
-          const isWinnerContainer = row.querySelector('.ies-container');
-          const isWinnerText =
-            isWinnerContainer?.querySelector('.ies-top')?.textContent?.trim().replace(/\s/g, '') ||
-            '';
-          const isWinner = isWinnerText === 'Itemwinner';
-
-          const priceText = row.querySelector('.isp-top')?.textContent || '';
-          const shippingText = row.querySelector('.isp-bottom')?.textContent || '';
-
-          return {
-            sellerProductId,
-            productCode,
-            isWinner,
-            price: getPrice(priceText),
-            shippingCost: getPrice(shippingText),
-          };
+          for (let y = 0; y < document.body.scrollHeight; y += scrollStep) {
+            window.scrollBy(0, scrollStep);
+            await new Promise((resolve) => setTimeout(resolve, scrollDelay)); // 각 스크롤 간격마다 대기
+          }
         });
-      });
 
-      this.dataService.appendToArray('coupangProductDetails', productsOnPage);
-      // 다음 페이지로 이동 (없다면 종료)
-      if (productsOnPage.length === 0) {
-        console.log('더 이상 상품이 없습니다. 크롤링을 종료합니다.');
-        isLastPage = true;
-      } else {
-        currentPage++;
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        const productsOnPage = await coupangPage.evaluate(() => {
+          const getPrice = (text: string) => text?.replace(/[^0-9]/g, '') || null;
+
+          // 모든 상품 행을 순회하며 데이터 추출
+          return Array.from(document.querySelectorAll('tr.inventory-line')).map((row) => {
+            const ipContentDiv = row.querySelector('.ip-right .ip-content div:nth-child(3)');
+            const sellerProductId = ipContentDiv
+              ? ipContentDiv.textContent.replace(/[^0-9]/g, '')
+              : null;
+
+            const productCode =
+              row.querySelector('.ip-title')?.textContent?.trim().split(' ')[0] || null;
+
+            const isWinnerContainer = row.querySelector('.ies-container');
+            const isWinnerText =
+              isWinnerContainer
+                ?.querySelector('.ies-top')
+                ?.textContent?.trim()
+                .replace(/\s/g, '') || '';
+            const isWinner = isWinnerText === 'Itemwinner';
+
+            const priceText = row.querySelector('.isp-top')?.textContent || '';
+            const shippingText = row.querySelector('.isp-bottom')?.textContent || '';
+
+            return {
+              sellerProductId,
+              productCode,
+              isWinner,
+              price: getPrice(priceText),
+              shippingCost: getPrice(shippingText),
+            };
+          });
+        });
+
+        this.dataService.appendToArray('coupangProductDetails', productsOnPage);
+        // 다음 페이지로 이동 (없다면 종료)
+        if (productsOnPage.length === 0) {
+          console.log(`자동 가격 조절: 쿠팡 크롤링 종료`);
+          isLastPage = true;
+        } else {
+          currentPage++;
+        }
       }
+    } finally {
+      console.log(`자동 가격 조절: 쿠팡 크롤링 종료`);
     }
 
     await this.puppeteerService.closeAllPages();
 
-    return this.calculateMarginAndAdjustPrices(
+    return await this.calculateMarginAndAdjustPrices(
       this.dataService.get('onchProductDetails'),
       this.dataService.get('coupangProductDetails'),
     );
   }
 
   async calculateMarginAndAdjustPrices(onchProductDetails: any[], coupangProductDetails: any[]) {
+    console.log(`자동 가격 조절: 연산 시작.`);
     const productsBatch = [];
 
     for (const coupangProduct of coupangProductDetails) {
@@ -233,6 +244,7 @@ export class PriceService {
         // 원래 가격보다 높은 경우, 원래 가격으로 유지
         if (newPrice < +coupangProduct.price) {
           productsBatch.push({
+            sellerProductId: coupangProduct.sellerProductId,
             productCode: coupangProduct.productCode,
             action: 'down',
             newPrice: String(Math.round(newPrice)),
@@ -254,6 +266,7 @@ export class PriceService {
         // 배치 크기만큼 쌓이면 저장 후 배열 초기화
 
         productsBatch.push({
+          sellerProductId: coupangProduct.sellerProductId,
           productCode: coupangProduct.productCode,
           action: 'up',
           newPrice: String(Math.round(newPrice)),
@@ -271,22 +284,37 @@ export class PriceService {
       this.dataService.appendToArray('updatedProducts', [...productsBatch]);
     }
 
-    this.dataService.delete('onchProductDetails');
-    this.dataService.delete('coupangProductDetails');
+    // this.dataService.delete('onchProductDetails');
+    // this.dataService.delete('coupangProductDetails');
+
+    console.log(`자동 가격 조절: 연산 종료.`);
+
+    await this.coupangService.couPangProductsPriceControl();
   }
 
-  async sellingPriceControl() {}
-
-  @Cron('0 5 * * *')
+  // @Cron('0 5 * * *')
   async autoPriceCron() {
-    try {
-      await this.taskService.setRunningStatus(true);
-      console.log('자동 가격 조절: 시작');
+    if (await this.taskService.acquireLock()) {
+      try {
+        const status = await this.taskService.getRunningStatus();
+        if (!status) {
+          await this.taskService.setRunningStatus(true);
+          console.log(`Running status: ${status}`);
+          console.log('자동 가격 조절: 시작');
 
-      await this.crawlSaleProducts();
-    } finally {
-      await this.taskService.setRunningStatus(false);
-      console.log('자동 가격 조절: 종료');
+          // 가격 조정 로직 실행
+          await this.crawlSaleProducts();
+        } else {
+          console.log('자동 가격 조절: 현재 다른 스케쥴이 있습니다. 1분 후에 다시 시도합니다.');
+          setTimeout(() => this.crawlSaleProducts(), 60000);
+        }
+      } finally {
+        await this.taskService.setRunningStatus(false);
+        this.taskService.releaseLock();
+        console.log('자동 가격 조절: 종료');
+      }
+    } else {
+      console.log('자동 가격 조절: 현재 다른 작업이 진행 중입니다. 잠금을 획득하지 못했습니다.');
     }
   }
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DataService } from '../data/data.service';
 import { CoupangService } from '../coupang/coupang.service';
-import { PuppeteerService } from '../auth/puppeteer.service';
+import { PuppeteerService } from '../puppeteer/puppeteer.service';
 import { TaskService } from '../task/task.service';
 
 @Injectable()
@@ -81,13 +81,26 @@ export class SoldoutService {
 
   @Cron('0 */5 * * * *')
   async soldOutCron() {
-    if ((await this.taskService.getRunningStatus()) === false) {
-      console.log('품절 상품 크론: 시작');
-      await this.crawlForNewProducts();
+    if (await this.taskService.acquireLock()) {
+      try {
+        const status = await this.taskService.getRunningStatus();
+        if (status === false) {
+          await this.taskService.setRunningStatus(true);
+          console.log(`Running status: ${status}`);
+
+          console.log('품절 상품 크론: 시작');
+          await this.crawlForNewProducts();
+        } else {
+          console.log('품절 상품 크론: 현재 다른 스케쥴이 진행중입니다.');
+          return;
+        }
+      } finally {
+        await this.taskService.setRunningStatus(false);
+        this.taskService.releaseLock();
+        console.log('품절 상품 크론: 종료');
+      }
     } else {
-      console.log();
-      return;
+      console.log('품절 상품 크론: 현재 다른 작업이 진행 중입니다. 잠금을 획득하지 못했습니다.');
     }
-    console.log('품절 상품 크론: 완료');
   }
 }

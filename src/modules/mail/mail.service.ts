@@ -46,4 +46,26 @@ export class MailService {
       console.error(`삭제 알림 이메일 발송 실패 (상품명: ${productName}):`, error.message);
     }
   }
+
+  async sendUpdateEmail(sellerProductIds: any[]): Promise<void> {
+    const mailOptions = {
+      from: `"Hush-BOT"`,
+      to: this.adminEmails,
+      subject: `자동 상품 가격 업데이트 안내`,
+      html: `
+        <h3>상품 업데이트 알림</h3>
+        <ul>
+          <li>업데이트 상품 개수: ${sellerProductIds.length}</li>
+          <li>ids: ${sellerProductIds}</li>
+        </ul>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log(`자동 상품 가격 업데이트 알림 이메일 발송 성공`);
+    } catch (error) {
+      console.error(`자동 상품 가격 업데이트 알림 이메일 발송 실패:`, error.message);
+    }
+  }
 }
