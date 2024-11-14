@@ -142,9 +142,11 @@ export class CoupangService {
   }
 
   async stopSaleForMatchedProducts(matchedProducts: any[]) {
-    const detailedProducts = await Promise.all(
-      matchedProducts.map((product) => this.fetchCoupangProductDetails(product.sellerProductId)),
-    );
+    const detailedProducts = [];
+    for (const product of matchedProducts) {
+      const details = await this.fetchCoupangProductDetails(product.sellerProductId);
+      detailedProducts.push(details);
+    }
 
     for (const productDetail of detailedProducts) {
       if (productDetail && productDetail.data && productDetail.data.items) {
@@ -158,7 +160,7 @@ export class CoupangService {
     }
   }
 
-  async deleteProducts(matchedProducts: any[]) {
+  async deleteProducts(matchedProducts: any[], type: string) {
     for (const product of matchedProducts) {
       const apiPath = `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/${product.sellerProductId}`;
 
@@ -183,7 +185,7 @@ export class CoupangService {
 
         setImmediate(() => {
           this.mailService
-            .sendDeletionEmail(product.sellerProductId, product.sellerProductName)
+            .sendDeletionEmail(product.sellerProductId, product.sellerProductName, type)
             .catch((error) => {
               console.error(
                 `비동기 메일 발송 실패 (상품명: ${product.sellerProductName}):`,

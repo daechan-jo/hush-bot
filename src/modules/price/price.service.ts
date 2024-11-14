@@ -306,7 +306,7 @@ export class PriceService {
           await this.crawlSaleProducts();
         } else {
           console.log('자동 가격 조절: 현재 다른 스케쥴이 있습니다. 1분 후에 다시 시도합니다.');
-          setTimeout(() => this.crawlSaleProducts(), 60000);
+          setTimeout(() => this.autoPriceCron(), 60000);
         }
       } finally {
         await this.taskService.setRunningStatus(false);

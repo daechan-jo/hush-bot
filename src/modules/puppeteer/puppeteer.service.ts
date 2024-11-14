@@ -20,8 +20,8 @@ export class PuppeteerService {
     });
   }
 
-  async loginToOnchSite() {
-    const page = await this.browser.newPage();
+  async loginToOnchSite(page?: Page) {
+    if (!page) page = await this.browser.newPage();
 
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.60 Safari/537.36',
@@ -29,6 +29,15 @@ export class PuppeteerService {
 
     // 로그인 페이지
     await page.goto('https://www.onch3.co.kr/login/login_web.php', { timeout: 0 });
+
+    await page.waitForSelector('#username', { timeout: 10000 });
+
+    // 로그인 입력 필드 확인
+    const isLoggedIn = await page.$('#username').then((el) => !el);
+    if (isLoggedIn) {
+      console.log('쿠팡 로그인: 이미 로그인 상태입니다. 페이지를 리턴합니다.');
+      return page;
+    }
 
     // 이메일과 비밀번호 입력
     await page.type(
@@ -47,8 +56,12 @@ export class PuppeteerService {
     return page;
   }
 
-  async loginToCoupangSite(page: Page) {
+  async loginToCoupangSite(page?: Page) {
     // 로그인 페이지
+    if (!page) {
+      page = await this.browser.newPage();
+    }
+
     await page.goto(
       'https://xauth.coupang.com/auth/realms/seller/protocol/openid-connect/auth?response_type=code&client_id=wing&redirect_uri=https%3A%2F%2Fwing.coupang.com%2Fsso%2Flogin?returnUrl%3D%252F&state=ec02db23-2738-48a2-b15e-81d22b32be64&login=true&scope=openid',
       {
@@ -56,6 +69,18 @@ export class PuppeteerService {
         timeout: 60000,
       },
     );
+
+    await page.waitForSelector('input[placeholder="온채널 또는 통합계정 아이디"]', {
+      timeout: 10000,
+    });
+
+    const isLoggedIn = await page
+      .$('input[placeholder="온채널 또는 통합계정 아이디"]')
+      .then((el) => !el);
+    if (isLoggedIn) {
+      console.log('온채널 로그인: 이미 로그인 상태입니다. 페이지를 리턴합니다.');
+      return page;
+    }
 
     // 이메일과 비밀번호 입력
     await page.type('#username', this.configService.get<string>('COUPANG_EMAIL'));

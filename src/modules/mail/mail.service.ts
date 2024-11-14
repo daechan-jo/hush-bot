@@ -24,11 +24,15 @@ export class MailService {
     ];
   }
 
-  async sendDeletionEmail(sellerProductId: number, productName: string): Promise<void> {
+  async sendDeletionEmail(
+    sellerProductId: number,
+    productName: string,
+    type: string,
+  ): Promise<void> {
     const mailOptions = {
       from: `"Hush-BOT"`,
       to: this.adminEmails,
-      subject: `품절 상품 삭제 알림 - ${productName}`,
+      subject: `${type} 상품 삭제 알림 - ${productName}`,
       html: `
         <h3>상품 삭제 알림</h3>
         <p>아래 상품이 삭제되었습니다:</p>

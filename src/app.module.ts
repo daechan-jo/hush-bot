@@ -12,6 +12,8 @@ import { PriceService } from './modules/price/price.service';
 import { PuppeteerService } from './modules/puppeteer/puppeteer.service';
 import { TaskModule } from './modules/task/task.module';
 import { CoupangService } from './modules/coupang/coupang.service';
+import { ConformModule } from './modules/conform/conform.module';
+import { ConformService } from './modules/conform/conform.service';
 
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { CoupangService } from './modules/coupang/coupang.service';
     CoupangModule,
     PriceModule,
     TaskModule,
+    ConformModule,
   ],
   providers: [],
 })
@@ -35,13 +38,15 @@ export class AppModule implements OnApplicationBootstrap {
     private readonly priceService: PriceService,
     private readonly puppeteerService: PuppeteerService,
     private readonly coupangService: CoupangService,
+    private readonly conformService: ConformService,
   ) {}
 
   async onApplicationBootstrap() {
     setTimeout(async () => {
       await this.puppeteerService.init();
       // await this.priceService.autoPriceCron();
-      await this.soldoutService.soldOutCron();
+      // await this.soldoutService.soldOutCron();
+      // await this.conformService.conformCron();
     }, 100);
   }
 }

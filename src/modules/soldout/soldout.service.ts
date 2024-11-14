@@ -15,22 +15,25 @@ export class SoldoutService {
   ) {}
 
   async crawlForNewProducts() {
-    const page = await this.puppeteerService.loginToOnchSite();
+    const onchPage = await this.puppeteerService.loginToOnchSite();
 
-    page.on('console', (msg) => {
+    onchPage.on('console', (msg) => {
       for (let i = 0; i < msg.args().length; ++i) console.log(`${i}: ${msg.args()[i]}`);
     });
 
-    await page.goto('https://www.onch3.co.kr/admin_mem_clo_list_2.php?ost=&sec=clo&ol=&npage=', {
-      timeout: 0,
-    });
-    await page.waitForSelector('td.title_4.sub_title', { timeout: 0 });
+    await onchPage.goto(
+      'https://www.onch3.co.kr/admin_mem_clo_list_2.php?ost=&sec=clo&ol=&npage=',
+      {
+        timeout: 0,
+      },
+    );
+    await onchPage.waitForSelector('td.title_4.sub_title', { timeout: 0 });
 
     const lastCronTime = this.dataService.getLastCronTime();
     console.log('마지막 실행 시간:', lastCronTime);
 
     // 품절 상품 페이지에서 상품코드 추출
-    const productCodes = await page.evaluate(
+    const productCodes = await onchPage.evaluate(
       (lastCronTimeMillis) => {
         const rows = Array.from(document.querySelectorAll('tr')); // 모든 행 가져오기
         const stockProductCodes: string[] = [];
@@ -62,8 +65,6 @@ export class SoldoutService {
       { timeout: 0 },
     );
 
-    await this.puppeteerService.closeAllPages();
-
     this.dataService.setLastCronTime(new Date());
 
     console.log('품절 상품 코드', productCodes.stockProductCodes);
@@ -79,7 +80,32 @@ export class SoldoutService {
     console.log('일치하는 품절 쿠팡 상품:', matchedProducts);
 
     await this.coupangService.stopSaleForMatchedProducts(matchedProducts);
-    await this.coupangService.deleteProducts(matchedProducts);
+    await this.coupangService.deleteProducts(matchedProducts, '품절');
+
+    // OnChannel에서 각 상품 삭제
+    for (const product of matchedProducts) {
+      const productCode = product.sellerProductName.match(/CH\d{7}/)?.[0];
+      if (!productCode) continue;
+
+      await onchPage.goto(`https://www.onch3.co.kr/admin_mem_prd_list.html?ost=${productCode}`, {
+        waitUntil: 'networkidle2',
+      });
+
+      // 알럿 창 처리 이벤트 리스너를 먼저 설정
+      onchPage.once('dialog', async (dialog) => {
+        await dialog.accept();
+      });
+
+      // 삭제 버튼 클릭
+      await onchPage.evaluate(() => {
+        const deleteButton = document.querySelector('a[onclick^="prd_list_del"]') as HTMLElement;
+        if (deleteButton) {
+          deleteButton.click();
+        }
+      });
+    }
+
+    await this.puppeteerService.closeAllPages();
   }
 
   @Cron('0 */5 * * * *')
