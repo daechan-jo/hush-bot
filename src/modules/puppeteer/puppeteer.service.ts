@@ -28,16 +28,7 @@ export class PuppeteerService {
     );
 
     // 로그인 페이지
-    await page.goto('https://www.onch3.co.kr/login/login_web.php', { timeout: 0 });
-
-    await page.waitForSelector('#username', { timeout: 10000 });
-
-    // 로그인 입력 필드 확인
-    const isLoggedIn = await page.$('#username').then((el) => !el);
-    if (isLoggedIn) {
-      console.log('쿠팡 로그인: 이미 로그인 상태입니다. 페이지를 리턴합니다.');
-      return page;
-    }
+    await page.goto('https://www.onch3.co.kr/login/login_web.php', { timeout: 3000 });
 
     // 이메일과 비밀번호 입력
     await page.type(
@@ -70,19 +61,17 @@ export class PuppeteerService {
       },
     );
 
-    await page.waitForSelector('input[placeholder="온채널 또는 통합계정 아이디"]', {
-      timeout: 10000,
+    const isLoginPage = await page.evaluate(() => {
+      return !!document.querySelector('.cp-loginpage__bg');
     });
 
-    const isLoggedIn = await page
-      .$('input[placeholder="온채널 또는 통합계정 아이디"]')
-      .then((el) => !el);
-    if (isLoggedIn) {
-      console.log('온채널 로그인: 이미 로그인 상태입니다. 페이지를 리턴합니다.');
-      return page;
+    if (!isLoginPage) {
+      console.log('이미 쿠팡에 로그인되어 있습니다.');
+      return page; // 로그인 페이지가 아니면 이미 로그인 상태
     }
 
-    // 이메일과 비밀번호 입력
+    // 로그인 필요
+    console.log('쿠팡 로그인 시도 중...');
     await page.type('#username', this.configService.get<string>('COUPANG_EMAIL'));
     await page.type('#password', this.configService.get<string>('COUPANG_PASSWORD'));
 

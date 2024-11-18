@@ -51,6 +51,37 @@ export class MailService {
     }
   }
 
+  async sendBatchDeletionEmail(
+    deletedProducts: { sellerProductId: number; productName: string }[],
+    type: string,
+  ): Promise<void> {
+    const productListHtml = deletedProducts
+      .map(
+        (product) => `<li>상품 ID: ${product.sellerProductId}, 상품명: ${product.productName}</li>`,
+      )
+      .join('');
+
+    const mailOptions = {
+      from: `"Hush-BOT"`,
+      to: this.adminEmails,
+      subject: `${type} 상품 삭제 알림 - 총 ${deletedProducts.length}개 상품`,
+      html: `
+      <h3>상품 삭제 알림</h3>
+      <p>아래 상품들이 삭제되었습니다:</p>
+      <ul>
+        ${productListHtml}
+      </ul>
+    `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('삭제 알림 이메일 발송 성공');
+    } catch (error) {
+      console.error('삭제 알림 이메일 발송 실패:', error.message);
+    }
+  }
+
   async sendUpdateEmail(sellerProductIds: any[]): Promise<void> {
     const mailOptions = {
       from: `"Hush-BOT"`,

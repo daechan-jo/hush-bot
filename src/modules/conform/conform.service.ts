@@ -23,7 +23,14 @@ export class ConformService {
       { timeout: 0 },
     );
 
-    await coupangPage.waitForSelector('tr.inventory-line');
+    try {
+      await coupangPage.waitForSelector('tr.inventory-line', { timeout: 3000 });
+      console.log('컨펌 상품 확인중...');
+    } catch (err) {
+      await this.puppeteerService.closeAllPages();
+      console.log('새로운 컨펌 상품이 없습니다.');
+      return;
+    }
 
     const productCodes = await coupangPage.evaluate(() => {
       return Array.from(document.querySelectorAll('tr.inventory-line'))

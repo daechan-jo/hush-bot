@@ -161,6 +161,7 @@ export class CoupangService {
   }
 
   async deleteProducts(matchedProducts: any[], type: string) {
+    const deletedProducts: { sellerProductId: number; productName: string }[] = [];
     for (const product of matchedProducts) {
       const apiPath = `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/${product.sellerProductId}`;
 
@@ -183,21 +184,22 @@ export class CoupangService {
 
         console.log(`상품 삭제 성공 (sellerProductId: ${product.sellerProductId}):`, response.data);
 
-        setImmediate(() => {
-          this.mailService
-            .sendDeletionEmail(product.sellerProductId, product.sellerProductName, type)
-            .catch((error) => {
-              console.error(
-                `비동기 메일 발송 실패 (상품명: ${product.sellerProductName}):`,
-                error.message,
-              );
-            });
+        deletedProducts.push({
+          sellerProductId: product.sellerProductId,
+          productName: product.sellerProductName,
         });
       } catch (error) {
         console.error(
           `상품 삭제 실패 (sellerProductId: ${product.sellerProductId}):`,
           error.response?.data || error.message,
         );
+      }
+    }
+    if (deletedProducts.length > 0) {
+      try {
+        await this.mailService.sendBatchDeletionEmail(deletedProducts, type);
+      } catch (error) {
+        console.error('삭제 알림 이메일 발송 실패:', error.message);
       }
     }
   }
