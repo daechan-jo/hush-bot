@@ -14,6 +14,8 @@ import { TaskModule } from './modules/task/task.module';
 import { CoupangService } from './modules/coupang/coupang.service';
 import { ConformModule } from './modules/conform/conform.module';
 import { ConformService } from './modules/conform/conform.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { TypeormConfig } from './config/typeorm.config';
 
 @Module({
   imports: [
@@ -22,6 +24,7 @@ import { ConformService } from './modules/conform/conform.service';
       isGlobal: true,
       envFilePath: path.resolve(__dirname, '../.env'),
     }),
+    TypeOrmModule.forRootAsync(TypeormConfig),
     PuppeteerModule,
     SoldoutModule,
     DataModule,
@@ -45,7 +48,7 @@ export class AppModule implements OnApplicationBootstrap {
     setTimeout(async () => {
       await this.puppeteerService.init();
       // await this.priceService.autoPriceCron();
-      await this.soldoutService.soldOutCron();
+      // await this.soldoutService.soldOutCron();
       // await this.conformService.conformCron();
     }, 100);
   }
