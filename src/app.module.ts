@@ -18,6 +18,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TypeormConfig } from './config/typeorm.config';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { redisConfig } from './config/redis.config';
+import { OnchModule } from './modules/onch/onch.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { redisConfig } from './config/redis.config';
     PriceModule,
     TaskModule,
     ConformModule,
+    OnchModule,
   ],
   providers: [],
 })
@@ -53,7 +55,7 @@ export class AppModule implements OnApplicationBootstrap {
     setTimeout(async () => {
       await this.puppeteerService.init();
       // await this.priceService.autoPriceCron();
-      // await this.soldoutService.soldOutCron();
+      await this.soldoutService.soldOutCron();
       // await this.conformService.conformCron();
     }, 100);
   }

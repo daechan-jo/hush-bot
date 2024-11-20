@@ -4,6 +4,10 @@ import { DataService } from '../data/data.service';
 import { CoupangService } from '../coupang/coupang.service';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
 import { TaskService } from '../task/task.service';
+import { OnchService } from '../onch/onch.service';
+import { Page } from 'puppeteer';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 @Injectable()
 export class SoldoutService {
@@ -12,9 +16,11 @@ export class SoldoutService {
     private readonly dataService: DataService,
     private readonly coupangService: CoupangService,
     private readonly taskService: TaskService,
+    private readonly onchService: OnchService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
-  async crawlForNewProducts() {
+  async soldoutProductsManagement() {
     const onchPage = await this.puppeteerService.loginToOnchSite();
 
     onchPage.on('console', (msg) => {
@@ -29,48 +35,27 @@ export class SoldoutService {
     );
     await onchPage.waitForSelector('td.title_4.sub_title', { timeout: 0 });
 
-    const lastCronTime = this.dataService.getLastCronTime();
+    const lastCronTimeString = await this.redis.get('lastRun');
+    const lastCronTime = lastCronTimeString ? new Date(lastCronTimeString) : null;
     console.log('마지막 실행 시간:', lastCronTime);
 
-    // 품절 상품 페이지에서 상품코드 추출
-    const productCodes = await onchPage.evaluate(
-      (lastCronTimeMillis) => {
-        const rows = Array.from(document.querySelectorAll('tr')); // 모든 행 가져오기
-        const stockProductCodes: string[] = [];
-        const productDates: string[] = [];
-
-        rows.forEach((row) => {
-          const dateCell = row.querySelector('td.title_4.sub_title');
-          const codeCell = row.querySelector('td.title_3.sub_title > b');
-
-          if (dateCell && codeCell) {
-            const dateText = dateCell.textContent?.trim() || '';
-            const codeText = codeCell.textContent?.trim() || '';
-
-            const productDate = new Date(dateText.slice(0, 10) + 'T' + dateText.slice(10));
-            productDates.push(productDate.toISOString());
-
-            if (lastCronTimeMillis && productDate.getTime() > lastCronTimeMillis) {
-              stockProductCodes.push(codeText);
-            }
-          }
-        });
-
-        return {
-          stockProductCodes: Array.from(new Set(stockProductCodes)),
-          productDates,
-        };
-      },
-      lastCronTime ? lastCronTime.getTime() : 0,
-      { timeout: 0 },
-    );
+    // 온채널 품절 상품 페이지에서 상품코드 추출
+    const productCodes = await this.onchService.crawlingOnchSoldoutProducts(onchPage, lastCronTime);
 
     this.dataService.setLastCronTime(new Date());
 
     console.log('품절 상품 코드', productCodes.stockProductCodes);
-
     const coupangProducts = await this.coupangService.fetchCoupangSellerProducts();
 
+    await this.deleteMatchProducts(onchPage, productCodes, coupangProducts);
+    await this.redis.set('lastRun', new Date().toISOString());
+  }
+
+  async deleteMatchProducts(
+    onchPage: Page,
+    productCodes: { stockProductCodes: any; productDates?: string[] },
+    coupangProducts: any[],
+  ) {
     const matchedProducts = coupangProducts.filter((product) =>
       productCodes.stockProductCodes.includes(
         product.sellerProductName.match(/(CH\d{7})/)?.[0] || '',
@@ -81,55 +66,33 @@ export class SoldoutService {
 
     await this.coupangService.stopSaleForMatchedProducts(matchedProducts);
     await this.coupangService.deleteProducts(matchedProducts, '품절');
-
-    // OnChannel에서 각 상품 삭제
-    for (const product of matchedProducts) {
-      const productCode = product.sellerProductName.match(/CH\d{7}/)?.[0];
-      if (!productCode) continue;
-
-      await onchPage.goto(`https://www.onch3.co.kr/admin_mem_prd_list.html?ost=${productCode}`, {
-        waitUntil: 'networkidle2',
-      });
-
-      // 알럿 창 처리 이벤트 리스너를 먼저 설정
-      onchPage.once('dialog', async (dialog) => {
-        await dialog.accept();
-      });
-
-      // 삭제 버튼 클릭
-      await onchPage.evaluate(() => {
-        const deleteButton = document.querySelector('a[onclick^="prd_list_del"]') as HTMLElement;
-        if (deleteButton) {
-          deleteButton.click();
-        }
-      });
-    }
+    await this.onchService.deleteProducts(onchPage, matchedProducts);
 
     await this.puppeteerService.closeAllPages();
   }
 
   @Cron('0 */5 * * * *')
   async soldOutCron() {
-    if (await this.taskService.acquireLock()) {
-      try {
-        const status = await this.taskService.getRunningStatus();
-        if (status === false) {
-          await this.taskService.setRunningStatus(true);
-          console.log(`Running status: ${status}`);
+    const isLocked = await this.redis.get('lock');
 
-          console.log('품절 상품 크론: 시작');
-          await this.crawlForNewProducts();
-        } else {
-          console.log('품절 상품 크론: 현재 다른 스케쥴이 진행중입니다.');
-          return;
-        }
-      } finally {
-        await this.taskService.setRunningStatus(false);
-        this.taskService.releaseLock();
-        console.log('품절 상품 크론: 종료');
-      }
-    } else {
+    if (isLocked) {
       console.log('품절 상품 크론: 현재 다른 작업이 진행 중입니다. 잠금을 획득하지 못했습니다.');
+      return;
+    }
+
+    try {
+      // Redis 락 설정
+      await this.redis.set('lock', 'locked');
+      console.log('품절 상품 크론: 시작');
+
+      // 크론 작업 실행
+      await this.soldoutProductsManagement();
+    } catch (error) {
+      console.error('크론 작업 중 오류 발생:', error);
+    } finally {
+      // 락 해제 (서비스 종료 시점)
+      await this.redis.del('lock');
+      console.log('품절 상품 크론: 종료');
     }
   }
 }
