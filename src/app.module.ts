@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { PuppeteerModule } from './modules/puppeteer/puppeteer.module';
 import { SoldoutModule } from './modules/soldout/soldout.module';
 import { SoldoutService } from './modules/soldout/soldout.service';
-import { DataModule } from './modules/data/data.module';
 import { CoupangModule } from './modules/coupang/coupang.module';
 import { PriceModule } from './modules/price/price.module';
 import { PriceService } from './modules/price/price.service';
@@ -33,7 +32,6 @@ import { OnchModule } from './modules/onch/onch.module';
     }),
     PuppeteerModule,
     SoldoutModule,
-    DataModule,
     CoupangModule,
     PriceModule,
     TaskModule,

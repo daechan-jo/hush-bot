@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { DataService } from '../data/data.service';
 import { CoupangService } from '../coupang/coupang.service';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
 import { TaskService } from '../task/task.service';
@@ -13,7 +12,6 @@ import Redis from 'ioredis';
 export class SoldoutService {
   constructor(
     private readonly puppeteerService: PuppeteerService,
-    private readonly dataService: DataService,
     private readonly coupangService: CoupangService,
     private readonly taskService: TaskService,
     private readonly onchService: OnchService,
@@ -41,8 +39,6 @@ export class SoldoutService {
 
     // 온채널 품절 상품 페이지에서 상품코드 추출
     const productCodes = await this.onchService.crawlingOnchSoldoutProducts(onchPage, lastCronTime);
-
-    this.dataService.setLastCronTime(new Date());
 
     console.log('품절 상품 코드', productCodes.stockProductCodes);
     const coupangProducts = await this.coupangService.fetchCoupangSellerProducts();
@@ -81,16 +77,13 @@ export class SoldoutService {
     }
 
     try {
-      // Redis 락 설정
       await this.redis.set('lock', 'locked');
       console.log('품절 상품 크론: 시작');
 
-      // 크론 작업 실행
       await this.soldoutProductsManagement();
     } catch (error) {
       console.error('크론 작업 중 오류 발생:', error);
     } finally {
-      // 락 해제 (서비스 종료 시점)
       await this.redis.del('lock');
       console.log('품절 상품 크론: 종료');
     }

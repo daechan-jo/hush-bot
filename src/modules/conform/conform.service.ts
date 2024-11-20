@@ -1,17 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
-import { DataService } from '../data/data.service';
 import { CoupangService } from '../coupang/coupang.service';
 import { TaskService } from '../task/task.service';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 @Injectable()
 export class ConformService {
   constructor(
     private readonly puppeteerService: PuppeteerService,
-    private readonly dataService: DataService,
     private readonly coupangService: CoupangService,
     private readonly taskService: TaskService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   async deleteConfirmedProducts() {
@@ -77,27 +78,24 @@ export class ConformService {
 
   @Cron('0 */27 * * * *')
   async conformCron() {
-    if (await this.taskService.acquireLock()) {
-      try {
-        const status = await this.taskService.getRunningStatus();
-        if (status === false) {
-          await this.taskService.setRunningStatus(true);
-          console.log(`Running status: ${status}`);
+    const isLocked = await this.redis.get('lock');
 
-          console.log('컨펌 삭제 크론: 시작');
-          await this.deleteConfirmedProducts();
-        } else {
-          console.log('컨펌 삭제 크론: 현재 다른 스케쥴이 있습니다. 1분 후에 다시 시도합니다.');
-          setTimeout(() => this.conformCron(), 60000);
-          return;
-        }
-      } finally {
-        await this.taskService.setRunningStatus(false);
-        this.taskService.releaseLock();
-        console.log('컨펌 삭제 크론: 종료');
-      }
-    } else {
-      console.log('품절 상품 크론: 현재 다른 작업이 진행 중입니다. 잠금을 획득하지 못했습니다.');
+    if (isLocked) {
+      console.log('컨펌 삭제 크론: 락을 획득하지 못했습니다. 1분 후에 다시 시도합니다.');
+      setTimeout(() => this.conformCron(), 60000);
+      return;
+    }
+
+    try {
+      await this.redis.set('lock', 'locked');
+      console.log('컨펌 삭제 크론: 시작');
+
+      await this.deleteConfirmedProducts();
+    } catch (error) {
+      console.error('크론 작업 중 오류 발생:', error);
+    } finally {
+      await this.redis.del('lock');
+      console.log('컨펌 삭제 크론: 종료');
     }
   }
 }
