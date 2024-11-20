@@ -16,6 +16,8 @@ import { ConformModule } from './modules/conform/conform.module';
 import { ConformService } from './modules/conform/conform.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TypeormConfig } from './config/typeorm.config';
+import { RedisModule } from '@nestjs-modules/ioredis';
+import { redisConfig } from './config/redis.config';
 
 @Module({
   imports: [
@@ -25,6 +27,9 @@ import { TypeormConfig } from './config/typeorm.config';
       envFilePath: path.resolve(__dirname, '../.env'),
     }),
     TypeOrmModule.forRootAsync(TypeormConfig),
+    RedisModule.forRootAsync({
+      useFactory: () => redisConfig,
+    }),
     PuppeteerModule,
     SoldoutModule,
     DataModule,
