@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
 import { CoupangService } from '../coupang/coupang.service';
-import { TaskService } from '../task/task.service';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 
@@ -11,7 +10,6 @@ export class ConformService {
   constructor(
     private readonly puppeteerService: PuppeteerService,
     private readonly coupangService: CoupangService,
-    private readonly taskService: TaskService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 

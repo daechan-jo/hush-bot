@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { CoupangService } from '../coupang/coupang.service';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
-import { TaskService } from '../task/task.service';
 import { OnchService } from '../onch/onch.service';
 import { Page } from 'puppeteer';
 import { InjectRedis } from '@nestjs-modules/ioredis';
@@ -13,7 +12,6 @@ export class SoldoutService {
   constructor(
     private readonly puppeteerService: PuppeteerService,
     private readonly coupangService: CoupangService,
-    private readonly taskService: TaskService,
     private readonly onchService: OnchService,
     @InjectRedis() private readonly redis: Redis,
   ) {}

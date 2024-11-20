@@ -9,7 +9,6 @@ import { CoupangModule } from './modules/coupang/coupang.module';
 import { PriceModule } from './modules/price/price.module';
 import { PriceService } from './modules/price/price.service';
 import { PuppeteerService } from './modules/puppeteer/puppeteer.service';
-import { TaskModule } from './modules/task/task.module';
 import { CoupangService } from './modules/coupang/coupang.service';
 import { ConformModule } from './modules/conform/conform.module';
 import { ConformService } from './modules/conform/conform.service';
@@ -34,7 +33,6 @@ import { OnchModule } from './modules/onch/onch.module';
     SoldoutModule,
     CoupangModule,
     PriceModule,
-    TaskModule,
     ConformModule,
     OnchModule,
   ],
