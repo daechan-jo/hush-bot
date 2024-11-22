@@ -1,13 +1,21 @@
 import { Module } from '@nestjs/common';
 import { PuppeteerModule } from '../puppeteer/puppeteer.module';
-import { DataModule } from '../data/data.module';
 import { CoupangModule } from '../coupang/coupang.module';
 import { PriceService } from './price.service';
-import { TaskModule } from '../task/task.module';
+import { OnchModule } from '../onch/onch.module';
+import { OnchProduct } from '../../entities/onchProduct.entity';
+import { UpdatedProduct } from '../../entities/updatedProduct.entity';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { PriceRepository } from './price.repository';
 
 @Module({
-  imports: [PuppeteerModule, DataModule, CoupangModule, TaskModule],
-  providers: [PriceService],
-  exports: [PriceService],
+  imports: [
+    TypeOrmModule.forFeature([OnchProduct, UpdatedProduct]),
+    PuppeteerModule,
+    CoupangModule,
+    OnchModule,
+  ],
+  providers: [PriceService, PriceRepository],
+  exports: [PriceService, PriceRepository],
 })
 export class PriceModule {}

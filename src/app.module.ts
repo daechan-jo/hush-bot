@@ -14,9 +14,10 @@ import { ConformModule } from './modules/conform/conform.module';
 import { ConformService } from './modules/conform/conform.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TypeormConfig } from './config/typeorm.config';
-import { RedisModule } from '@nestjs-modules/ioredis';
+import { InjectRedis, RedisModule } from '@nestjs-modules/ioredis';
 import { redisConfig } from './config/redis.config';
 import { OnchModule } from './modules/onch/onch.module';
+import Redis from 'ioredis';
 
 @Module({
   imports: [
@@ -45,14 +46,16 @@ export class AppModule implements OnApplicationBootstrap {
     private readonly puppeteerService: PuppeteerService,
     private readonly coupangService: CoupangService,
     private readonly conformService: ConformService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   async onApplicationBootstrap() {
+    await this.redis.del('lock');
     setTimeout(async () => {
       await this.puppeteerService.init();
-      // await this.priceService.autoPriceCron();
       await this.soldoutService.soldOutCron();
-      // await this.conformService.conformCron();
+      await this.conformService.conformCron();
+      // await this.priceService.autoPriceCron();
     }, 100);
   }
 }

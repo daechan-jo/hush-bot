@@ -4,12 +4,14 @@ import { PuppeteerService } from '../puppeteer/puppeteer.service';
 import { CoupangService } from '../coupang/coupang.service';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { OnchService } from '../onch/onch.service';
 
 @Injectable()
 export class ConformService {
   constructor(
     private readonly puppeteerService: PuppeteerService,
     private readonly coupangService: CoupangService,
+    private readonly onchService: OnchService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -28,21 +30,22 @@ export class ConformService {
     } catch (err) {
       await this.puppeteerService.closeAllPages();
       console.log('새로운 컨펌 상품이 없습니다.');
+      await this.puppeteerService.closeAllPages();
       return;
     }
 
-    const productCodes = await coupangPage.evaluate(() => {
+    const conformProductCodes = await coupangPage.evaluate(() => {
       return Array.from(document.querySelectorAll('tr.inventory-line'))
         .map((row) => {
           return row.querySelector('.ip-title')?.textContent?.trim().split(' ')[0] || null;
         })
-        .filter((code) => code !== null); // 유효한 코드만 남김
+        .filter((code) => code !== null);
     });
     await this.puppeteerService.closeAllPages();
 
     const coupangProducts = await this.coupangService.fetchCoupangSellerProducts();
     const matchedProducts = coupangProducts.filter((product) =>
-      productCodes.some((code) => product.sellerProductName.includes(code)),
+      conformProductCodes.some((code) => product.sellerProductName.includes(code)),
     );
 
     // 쿠팡에서 중지 및 삭제
@@ -52,35 +55,27 @@ export class ConformService {
     // OnChannel 사이트 로그인 후 페이지 열기
     const onchPage = await this.puppeteerService.loginToOnchSite();
 
-    // OnChannel에서 각 상품 삭제
-    for (const code of productCodes) {
-      await onchPage.goto(`https://www.onch3.co.kr/admin_mem_prd_list.html?ost=${code}`, {
-        waitUntil: 'networkidle2',
-      });
-
-      onchPage.once('dialog', async (dialog) => {
-        await dialog.accept();
-      });
-
-      // 삭제 버튼 클릭 및 알럿 처리
-      await onchPage.evaluate(() => {
-        const deleteButton = document.querySelector('a[onclick^="prd_list_del"]') as HTMLElement;
-        if (deleteButton) {
-          deleteButton.click();
-        }
-      });
-    }
+    await this.onchService.deleteProducts(onchPage, matchedProducts);
 
     await this.puppeteerService.closeAllPages();
   }
 
   @Cron('0 */27 * * * *')
-  async conformCron() {
+  async conformCron(retryCount = 0) {
+    const MAX_RETRIES = 3;
+
     const isLocked = await this.redis.get('lock');
 
     if (isLocked) {
-      console.log('컨펌 삭제 크론: 락을 획득하지 못했습니다. 1분 후에 다시 시도합니다.');
-      setTimeout(() => this.conformCron(), 60000);
+      console.log(
+        `컨펌 삭제 크론: 락을 획득하지 못했습니다. ${retryCount + 1}번째 재시도 중입니다.`,
+      );
+
+      if (retryCount < MAX_RETRIES - 1) {
+        setTimeout(() => this.conformCron(retryCount + 1), 60000);
+      } else {
+        console.log('컨펌 삭제 크론: 최대 재시도 횟수에 도달했습니다. 작업을 종료합니다.');
+      }
       return;
     }
 

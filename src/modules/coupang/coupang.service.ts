@@ -4,7 +4,6 @@ import * as crypto from 'crypto';
 
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '../mail/mail.service';
-import { DataService } from '../data/data.service';
 
 @Injectable()
 export class CoupangService {
@@ -15,7 +14,6 @@ export class CoupangService {
   constructor(
     private readonly configService: ConfigService,
     private readonly mailService: MailService,
-    private readonly dataService: DataService,
   ) {
     this.secretKey = this.configService.get<string>('COUPANG_SECRET_KEY');
     this.accessKey = this.configService.get<string>('COUPANG_ACCESS_KEY');
@@ -208,8 +206,8 @@ export class CoupangService {
     console.log(`자동 가격 조절: 상품 가격 업데이트 시작`);
 
     const sellerProductIds = [];
-
-    const updatedProducts = await this.dataService.get('updatedProducts');
+    const updatedProducts = [];
+    // const updatedProducts = await this.dataService.get('updatedProducts');
 
     for (const product of updatedProducts) {
       try {

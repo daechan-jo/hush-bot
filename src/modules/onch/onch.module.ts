@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { MailModule } from '../mail/mail.module';
-import { DataModule } from '../data/data.module';
 import { OnchService } from './onch.service';
+import { OnchRepository } from './onch.repository';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { OnchProduct } from '../../entities/onchProduct.entity';
 
 @Module({
-  imports: [MailModule, DataModule],
-  providers: [OnchService],
-  exports: [OnchService],
+  imports: [TypeOrmModule.forFeature([OnchProduct]), MailModule],
+  providers: [OnchService, OnchRepository],
+  exports: [OnchService, OnchRepository],
 })
 export class OnchModule {}

@@ -37,6 +37,11 @@ export class SoldoutService {
 
     // 온채널 품절 상품 페이지에서 상품코드 추출
     const productCodes = await this.onchService.crawlingOnchSoldoutProducts(onchPage, lastCronTime);
+    if (productCodes.stockProductCodes.length === 0) {
+      console.log('품절 상품이 없습니다.');
+      await this.puppeteerService.closeAllPages();
+      return;
+    }
 
     console.log('품절 상품 코드', productCodes.stockProductCodes);
     const coupangProducts = await this.coupangService.fetchCoupangSellerProducts();

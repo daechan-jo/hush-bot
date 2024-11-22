@@ -6,6 +6,14 @@ export class OnchService {
   constructor() {}
 
   async deleteProducts(onchPage: Page, matchedProducts: any[]) {
+    onchPage.on('dialog', async (dialog) => {
+      try {
+        await dialog.accept();
+      } catch (err) {
+        console.error(`대화상자를 처리하지 못했습니다.: ${err.message}`);
+      }
+    });
+
     // OnChannel에서 각 상품 삭제
     for (const product of matchedProducts) {
       const productCode = product.sellerProductName.match(/CH\d{7}/)?.[0];
@@ -15,11 +23,6 @@ export class OnchService {
         waitUntil: 'networkidle2',
       });
 
-      // 알럿 창 처리 이벤트 리스너를 먼저 설정
-      onchPage.once('dialog', async (dialog) => {
-        await dialog.accept();
-      });
-
       // 삭제 버튼 클릭
       await onchPage.evaluate(() => {
         const deleteButton = document.querySelector('a[onclick^="prd_list_del"]') as HTMLElement;
@@ -27,6 +30,9 @@ export class OnchService {
           deleteButton.click();
         }
       });
+
+      // 잠시 대기 (Dialog 처리 시간 보장)
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
 
