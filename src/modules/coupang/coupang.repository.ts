@@ -15,4 +15,8 @@ export class CoupangRepository {
   async getCoupangProducts() {
     return await this.coupangRepository.find();
   }
+
+  async clearCoupangProducts() {
+    return await this.coupangRepository.clear();
+  }
 }

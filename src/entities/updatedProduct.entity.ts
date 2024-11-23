@@ -1,4 +1,12 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Index,
+  ManyToOne,
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { CronVersion } from './cronVersion.entity';
 
 @Entity()
 export class UpdatedProduct {
@@ -22,6 +30,10 @@ export class UpdatedProduct {
 
   @Column({ name: 'current_is_winner', type: 'boolean', nullable: true })
   currentIsWinner: boolean;
+
+  @Index()
+  @ManyToOne(() => CronVersion, (cronVersion) => cronVersion.updatedProducts, { nullable: false })
+  cronVersion: CronVersion;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

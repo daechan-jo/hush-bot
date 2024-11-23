@@ -5,7 +5,9 @@ import { Page } from 'puppeteer';
 export class OnchService {
   constructor() {}
 
-  async deleteProducts(onchPage: Page, matchedProducts: any[]) {
+  async deleteProducts(cronId: string, type: string, onchPage: Page, matchedProducts: any[]) {
+    console.log(`${type}${cronId}: 온채널 판매상품 초기화...`);
+
     onchPage.on('dialog', async (dialog) => {
       try {
         await dialog.accept();

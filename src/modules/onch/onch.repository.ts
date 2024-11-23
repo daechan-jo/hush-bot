@@ -15,4 +15,8 @@ export class OnchRepository {
   async getOnchProducts() {
     return await this.onchRepository.find();
   }
+
+  async clearOnchProducts() {
+    return await this.onchRepository.clear();
+  }
 }

@@ -5,6 +5,8 @@ import { CoupangService } from '../coupang/coupang.service';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { OnchService } from '../onch/onch.service';
+import { UtilService } from '../util/util.service';
+import { CronType } from '../../types/enum.types';
 
 @Injectable()
 export class ConformService {
@@ -12,10 +14,11 @@ export class ConformService {
     private readonly puppeteerService: PuppeteerService,
     private readonly coupangService: CoupangService,
     private readonly onchService: OnchService,
+    private readonly utilService: UtilService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
-  async deleteConfirmedProducts() {
+  async deleteConfirmedProducts(cronId: string) {
     const coupangPage = await this.puppeteerService.loginToCoupangSite();
 
     // 쿠팡 페이지에서 상품 코드 추출
@@ -25,11 +28,10 @@ export class ConformService {
     );
 
     try {
+      console.log(`${CronType.CONFORM}${cronId}: 컨펌 상품 확인중...`);
       await coupangPage.waitForSelector('tr.inventory-line', { timeout: 3000 });
-      console.log('컨펌 상품 확인중...');
     } catch (err) {
-      await this.puppeteerService.closeAllPages();
-      console.log('새로운 컨펌 상품이 없습니다.');
+      console.log(`${CronType.CONFORM}${cronId}: 새로운 컨펌 상품이 없습니다`);
       await this.puppeteerService.closeAllPages();
       return;
     }
@@ -43,52 +45,57 @@ export class ConformService {
     });
     await this.puppeteerService.closeAllPages();
 
-    const coupangProducts = await this.coupangService.fetchCoupangSellerProducts();
+    const coupangProducts = await this.coupangService.fetchCoupangSellerProducts(
+      cronId,
+      CronType.CONFORM,
+    );
+
     const matchedProducts = coupangProducts.filter((product) =>
       conformProductCodes.some((code) => product.sellerProductName.includes(code)),
     );
 
+    console.log(`${CronType.CONFORM}${cronId}: 컨펌 상품\n`, matchedProducts);
+
     // 쿠팡에서 중지 및 삭제
-    await this.coupangService.stopSaleForMatchedProducts(matchedProducts);
-    await this.coupangService.deleteProducts(matchedProducts, '컨펌');
+    await this.coupangService.stopSaleForMatchedProducts(cronId, CronType.CONFORM, matchedProducts);
+    await this.coupangService.deleteProducts(cronId, CronType.CONFORM, matchedProducts);
 
     // OnChannel 사이트 로그인 후 페이지 열기
     const onchPage = await this.puppeteerService.loginToOnchSite();
 
-    await this.onchService.deleteProducts(onchPage, matchedProducts);
+    await this.onchService.deleteProducts(cronId, CronType.CONFORM, onchPage, matchedProducts);
 
     await this.puppeteerService.closeAllPages();
   }
 
   @Cron('0 */27 * * * *')
-  async conformCron(retryCount = 0) {
+  async conformCron(retryCount = 0, cronId?: string) {
+    const currentCronId = cronId || this.utilService.generateCronId();
     const MAX_RETRIES = 3;
 
     const isLocked = await this.redis.get('lock');
 
     if (isLocked) {
-      console.log(
-        `컨펌 삭제 크론: 락을 획득하지 못했습니다. ${retryCount + 1}번째 재시도 중입니다.`,
-      );
+      console.log(`${CronType.CONFORM}${currentCronId}: 락 획득 실패-${retryCount + 1}번째 재시도`);
 
       if (retryCount < MAX_RETRIES - 1) {
-        setTimeout(() => this.conformCron(retryCount + 1), 60000);
+        setTimeout(() => this.conformCron(retryCount + 1, currentCronId), 60000);
       } else {
-        console.log('컨펌 삭제 크론: 최대 재시도 횟수에 도달했습니다. 작업을 종료합니다.');
+        console.log(`${CronType.CONFORM}${currentCronId}: 최대 재시도 횟수 도달 작업 종료`);
       }
       return;
     }
 
     try {
       await this.redis.set('lock', 'locked');
-      console.log('컨펌 삭제 크론: 시작');
+      console.log(`${CronType.CONFORM}${currentCronId}: 시작...`);
 
-      await this.deleteConfirmedProducts();
+      await this.deleteConfirmedProducts(currentCronId);
     } catch (error) {
-      console.error('크론 작업 중 오류 발생:', error);
+      console.error(`${CronType.ERROR}${CronType.CONFORM}${currentCronId}: 오류 발생\n`, error);
     } finally {
       await this.redis.del('lock');
-      console.log('컨펌 삭제 크론: 종료');
+      console.log(`${CronType.CONFORM}${currentCronId}: 종료`);
     }
   }
 }

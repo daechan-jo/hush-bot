@@ -1,6 +1,7 @@
 import * as nodemailer from 'nodemailer';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as path from 'node:path';
 
 @Injectable()
 export class MailService {
@@ -82,7 +83,12 @@ export class MailService {
     }
   }
 
-  async sendUpdateEmail(sellerProductIds: any[]): Promise<void> {
+  async sendUpdateEmail(
+    filePath: string,
+    successCount: number,
+    failedCount: number,
+  ): Promise<void> {
+    const totalProducts = successCount + failedCount;
     const mailOptions = {
       from: `"Hush-BOT"`,
       to: this.adminEmails,
@@ -90,10 +96,17 @@ export class MailService {
       html: `
         <h3>상품 업데이트 알림</h3>
         <ul>
-          <li>업데이트 상품 개수: ${sellerProductIds.length}</li>
-          <li>ids: ${sellerProductIds}</li>
+        	<li><strong>Total:</strong> ${totalProducts}</li>
+        	<li><strong>성공:</strong> ${successCount}</li>
+        	<li><strong>실패:</strong> ${failedCount}</li>
         </ul>
       `,
+      attachments: [
+        {
+          filename: path.basename(filePath),
+          path: filePath,
+        },
+      ],
     };
 
     try {

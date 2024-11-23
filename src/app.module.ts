@@ -18,6 +18,9 @@ import { InjectRedis, RedisModule } from '@nestjs-modules/ioredis';
 import { redisConfig } from './config/redis.config';
 import { OnchModule } from './modules/onch/onch.module';
 import Redis from 'ioredis';
+import { UtilModule } from './modules/util/util.module';
+import { OnchRepository } from './modules/onch/onch.repository';
+import { CoupangRepository } from './modules/coupang/coupang.repository';
 
 @Module({
   imports: [
@@ -36,6 +39,7 @@ import Redis from 'ioredis';
     PriceModule,
     ConformModule,
     OnchModule,
+    UtilModule,
   ],
   providers: [],
 })
@@ -44,13 +48,18 @@ export class AppModule implements OnApplicationBootstrap {
     private readonly soldoutService: SoldoutService,
     private readonly priceService: PriceService,
     private readonly puppeteerService: PuppeteerService,
-    private readonly coupangService: CoupangService,
     private readonly conformService: ConformService,
+    private readonly onchRepository: OnchRepository,
+    private readonly coupangRepository: CoupangRepository,
+    private readonly coupangService: CoupangService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
   async onApplicationBootstrap() {
     await this.redis.del('lock');
+    await this.onchRepository.clearOnchProducts();
+    await this.coupangRepository.clearCoupangProducts();
+
     setTimeout(async () => {
       await this.puppeteerService.init();
       await this.soldoutService.soldOutCron();
