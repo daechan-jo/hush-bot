@@ -21,6 +21,8 @@ import Redis from 'ioredis';
 import { UtilModule } from './modules/util/util.module';
 import { OnchRepository } from './modules/onch/onch.repository';
 import { CoupangRepository } from './modules/coupang/coupang.repository';
+import { ShippingModule } from './modules/shipping/shipping.module';
+import { ShippingService } from './modules/shipping/shipping.service';
 
 @Module({
   imports: [
@@ -40,6 +42,7 @@ import { CoupangRepository } from './modules/coupang/coupang.repository';
     ConformModule,
     OnchModule,
     UtilModule,
+    ShippingModule,
   ],
   providers: [],
 })
@@ -52,6 +55,7 @@ export class AppModule implements OnApplicationBootstrap {
     private readonly onchRepository: OnchRepository,
     private readonly coupangRepository: CoupangRepository,
     private readonly coupangService: CoupangService,
+    private readonly shippingService: ShippingService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -62,8 +66,9 @@ export class AppModule implements OnApplicationBootstrap {
 
     setTimeout(async () => {
       await this.puppeteerService.init();
-      await this.soldoutService.soldOutCron();
-      await this.conformService.conformCron();
+      // await this.soldoutService.soldOutCron();
+      // await this.conformService.conformCron();
+      // await this.shippingService.shippingCostCron();
       // await this.priceService.autoPriceCron();
     }, 100);
   }

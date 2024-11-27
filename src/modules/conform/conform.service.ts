@@ -26,10 +26,11 @@ export class ConformService {
       `https://wing.coupang.com/vendor-inventory/list?searchKeywordType=ALL&searchKeywords=&salesMethod=ALL&productStatus=ALL&stockSearchType=ALL&shippingFeeSearchType=ALL&displayCategoryCodes=&listingStartTime=null&listingEndTime=null&saleEndDateSearchType=ALL&bundledShippingSearchType=ALL&displayDeletedProduct=false&shippingMethod=ALL&exposureStatus=NON_CONFORMING_ATTR&locale=ko_KR&sortMethod=SORT_BY_REGISTRATION_DATE&countPerPage=50&page=1`,
       { timeout: 0 },
     );
+    await coupangPage.waitForNavigation({ waitUntil: 'networkidle0' });
 
     try {
       console.log(`${CronType.CONFORM}${cronId}: 컨펌 상품 확인중...`);
-      await coupangPage.waitForSelector('tr.inventory-line', { timeout: 3000 });
+      await coupangPage.waitForSelector('tr.inventory-line', { timeout: 6000 });
     } catch (err) {
       console.log(`${CronType.CONFORM}${cronId}: 새로운 컨펌 상품이 없습니다`);
       await this.puppeteerService.closeAllPages();
@@ -93,6 +94,12 @@ export class ConformService {
       await this.deleteConfirmedProducts(currentCronId);
     } catch (error) {
       console.error(`${CronType.ERROR}${CronType.CONFORM}${currentCronId}: 오류 발생\n`, error);
+      if (retryCount < 10) {
+        console.log(`${CronType.CONFORM}${currentCronId}: ${retryCount + 1}번째 재시도 예정`);
+        setTimeout(() => this.conformCron(retryCount + 1, cronId), 3000);
+      } else {
+        console.error(`${CronType.ERROR}${CronType.CONFORM}${currentCronId}: 재시도 횟수 초과`);
+      }
     } finally {
       await this.redis.del('lock');
       console.log(`${CronType.CONFORM}${currentCronId}: 종료`);

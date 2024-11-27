@@ -222,7 +222,7 @@ export class PriceService {
       ); // 판매수익
       const wholesalePrice = +product.onchSellerPrice + +product.onchShippingCost; // 도매비용
       const netProfit = salePrice - wholesalePrice; // 순수익
-      const margin = Math.round(wholesalePrice * 0.05); // 목표마진(최소)
+      const margin = Math.round(wholesalePrice * 0.07); // 목표마진(최소)
 
       if (netProfit > margin && !product.coupangIsWinner) {
         const requiredDecreaseInRevenue = netProfit - margin;
@@ -283,6 +283,7 @@ export class PriceService {
     try {
       await this.onchRepository.clearOnchProducts();
       await this.coupangRepository.clearCoupangProducts();
+
       console.log(`${CronType.PRICE}${cronId}: 온채널/쿠팡 크롤링 데이터 삭제`);
     } catch (err) {
       console.error(
@@ -293,13 +294,13 @@ export class PriceService {
   }
 
   @Cron('0 3 * * *')
-  async autoPriceCron(cronId?: string) {
+  async autoPriceCron(cronId?: string, retryCount = 0) {
     const currentCronId = cronId || this.utilService.generateCronId();
     const isLocked = await this.redis.get('lock');
 
     if (isLocked) {
       console.log(`${CronType.PRICE}${currentCronId}: 락 획득 실패-1분 후 재시도`);
-      setTimeout(() => this.autoPriceCron(), 60000);
+      setTimeout(() => this.autoPriceCron(currentCronId), 60000);
       return;
     }
 
@@ -307,10 +308,15 @@ export class PriceService {
       await this.redis.set('lock', 'locked');
       console.log(`${CronType.PRICE}${currentCronId}: 시작`);
 
-      // await this.crawlOnchRegisteredProducts(currentCronId);
-      await this.calculateMarginAndAdjustPrices(currentCronId);
+      await this.crawlOnchRegisteredProducts(currentCronId);
     } catch (error) {
       console.error(`${CronType.ERROR}${CronType.PRICE}${currentCronId}: 오류 발생\n`, error);
+      if (retryCount < 10) {
+        console.log(`${CronType.PRICE}${currentCronId}: ${retryCount + 1}번째 재시도 예정`);
+        setTimeout(() => this.autoPriceCron(cronId, retryCount + 1), 3000);
+      } else {
+        console.error(`${CronType.ERROR}${CronType.PRICE}${currentCronId}: 재시도 횟수 초과`);
+      }
     } finally {
       await this.redis.del('lock');
       console.log(`${CronType.PRICE}${currentCronId}: 종료`);

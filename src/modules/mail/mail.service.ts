@@ -2,6 +2,7 @@ import * as nodemailer from 'nodemailer';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as path from 'node:path';
+import { CronType } from '../../types/enum.types';
 
 @Injectable()
 export class MailService {
@@ -92,7 +93,7 @@ export class MailService {
     const mailOptions = {
       from: `"Hush-BOT"`,
       to: this.adminEmails,
-      subject: `자동 상품 가격 업데이트 안내`,
+      subject: `${CronType.PRICE} 자동 상품 가격 업데이트 안내`,
       html: `
         <h3>상품 업데이트 알림</h3>
         <ul>

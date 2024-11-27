@@ -263,7 +263,7 @@ export class CoupangService {
                   'X-Coupang-Date': datetime,
                 },
               });
-              successCount++; // 성공 카운트 증가
+              successCount++;
             } catch (updateError) {
               console.error(
                 `${CronType.ERROR}${CronType.PRICE}${cronId}: 가격 업데이트 오류 vendorItemId-${vendorItemId}\n`,
@@ -315,5 +315,58 @@ export class CoupangService {
     });
 
     console.log(`${CronType.PRICE}${cronId}: 상품 가격 업데이트 완료`);
+  }
+
+  async shippingCostManagement(cronId: string) {
+    console.log(`${CronType.SHIPPING}${cronId}: 반품 배송비 관리 시작...`);
+
+    const coupangProducts = await this.fetchCoupangSellerProducts(cronId, CronType.SHIPPING);
+
+    let successCount = 0;
+    let failedCount = 0;
+
+    const productsToUpdate = coupangProducts.filter((product) => product.returnCharge !== 10000);
+
+    if (productsToUpdate.length === 0) {
+      console.log(
+        `${CronType.SHIPPING}${cronId}: 모든 상품의 반품 배송비가 올바르게 설정되어 있음`,
+      );
+    }
+
+    console.log(`${CronType.SHIPPING}${cronId}: ${productsToUpdate.length}개 수정 시작...`);
+
+    for (const product of productsToUpdate) {
+      const updatePath = `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/${product.sellerProductId}/partial`;
+      const body = { sellerProductId: product.sellerProductId, returnCharge: 10000 };
+
+      try {
+        const { authorization, datetime } = await this.createHmacSignature(
+          'PUT',
+          updatePath,
+          '',
+          false,
+        );
+
+        await axios.put(`https://api-gateway.coupang.com${updatePath}`, body, {
+          headers: {
+            Authorization: authorization,
+            'Content-Type': 'application/json;charset=UTF-8',
+            'X-Coupang-Date': datetime,
+          },
+        });
+
+        successCount++;
+      } catch (updateError) {
+        console.error(
+          `${CronType.ERROR}${CronType.SHIPPING}${cronId}: 반품 배송비 업데이트 실패 SellerProductId-${product.sellerProductId}\n`,
+          updateError.response?.data || updateError.message,
+        );
+        failedCount++;
+      }
+    }
+
+    console.log(
+      `${CronType.SHIPPING}${cronId}: 반품 배송비 관리 완료\n성공 ${successCount}개, 실패 ${failedCount}개`,
+    );
   }
 }

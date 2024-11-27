@@ -21,14 +21,16 @@ export class PuppeteerService {
   }
 
   async loginToOnchSite(page?: Page) {
-    if (!page) page = await this.browser.newPage();
+    if (!page || page.isClosed()) {
+      page = await this.browser.newPage();
+    }
 
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.60 Safari/537.36',
     );
 
     // 로그인 페이지
-    await page.goto('https://www.onch3.co.kr/login/login_web.php', { timeout: 3000 });
+    await page.goto('https://www.onch3.co.kr/login/login_web.php', { timeout: 60000 });
 
     // 이메일과 비밀번호 입력
     await page.type(
@@ -48,8 +50,7 @@ export class PuppeteerService {
   }
 
   async loginToCoupangSite(page?: Page) {
-    // 로그인 페이지
-    if (!page) {
+    if (!page || page.isClosed()) {
       page = await this.browser.newPage();
     }
 
