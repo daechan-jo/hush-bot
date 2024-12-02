@@ -1,20 +1,23 @@
+import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
+
 import { CronType } from '../../types/enum.types';
 import { CoupangService } from '../coupang/coupang.service';
 import { UtilService } from '../util/util.service';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import Redis from 'ioredis';
 
 export class ShippingService {
   constructor(
     private readonly coupangService: CoupangService,
     private readonly utilService: UtilService,
+    private readonly configService: ConfigService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
   @Cron('0 0 * * * *')
   async shippingCostCron(cronId?: string, retryCount = 0) {
-    const isLocked = await this.redis.get('lock');
+    const isLocked = await this.redis.get(`lock:${this.configService.get<string>('STORE')}`);
     const currentCronId = cronId || this.utilService.generateCronId();
 
     if (isLocked) {
@@ -24,7 +27,7 @@ export class ShippingService {
     }
 
     try {
-      await this.redis.set('lock', 'locked');
+      await this.redis.set(`lock:${this.configService.get<string>('STORE')}`, 'locked');
       console.log(`${CronType.SHIPPING}${cronId}: 시작`);
 
       await this.coupangService.shippingCostManagement(cronId);
@@ -37,7 +40,7 @@ export class ShippingService {
         console.error(`${CronType.ERROR}${CronType.SHIPPING}${currentCronId}: 재시도 횟수 초과`);
       }
     } finally {
-      await this.redis.del('lock');
+      await this.redis.del(`lock:${this.configService.get<string>('STORE')}`);
       console.log(`${CronType.SHIPPING}${cronId}: 종료`);
     }
   }

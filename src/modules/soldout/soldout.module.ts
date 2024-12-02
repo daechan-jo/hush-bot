@@ -4,9 +4,10 @@ import { SoldoutService } from './soldout.service';
 import { CoupangModule } from '../coupang/coupang.module';
 import { OnchModule } from '../onch/onch.module';
 import { UtilModule } from '../util/util.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [PuppeteerModule, CoupangModule, OnchModule, UtilModule],
+  imports: [ConfigModule, PuppeteerModule, CoupangModule, OnchModule, UtilModule],
   providers: [SoldoutService],
   exports: [SoldoutService],
 })

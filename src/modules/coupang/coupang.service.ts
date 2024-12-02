@@ -1,14 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import axios from 'axios';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as XLSX from 'xlsx';
+
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MailService } from '../mail/mail.service';
-import { UpdatedProduct } from '../../entities/updatedProduct.entity';
-import { PriceRepository } from '../price/price.repository';
+import axios from 'axios';
+import * as XLSX from 'xlsx';
+
 import { CronType } from '../../types/enum.types';
+import { MailService } from '../mail/mail.service';
+import { PriceRepository } from '../price/price.repository';
 
 @Injectable()
 export class CoupangService {
@@ -213,7 +214,11 @@ export class CoupangService {
     }
     if (deletedProducts.length > 0) {
       try {
-        await this.mailService.sendBatchDeletionEmail(deletedProducts, type);
+        await this.mailService.sendBatchDeletionEmail(
+          deletedProducts,
+          type,
+          this.configService.get<string>('STORE'),
+        );
       } catch (error) {
         console.error(
           `${CronType.ERROR}${type}${cronId}: 삭제 알림 이메일 발송 실패\n`,
@@ -301,7 +306,12 @@ export class CoupangService {
 
     setImmediate(() => {
       this.mailService
-        .sendUpdateEmail(filePath, successCount, failedCount)
+        .sendUpdateEmail(
+          filePath,
+          successCount,
+          failedCount,
+          this.configService.get<string>('STORE'),
+        )
         .then(() => {
           console.log(`${CronType.PRICE}${cronId}: 엑셀 파일과 함께 이메일 전송 완료`);
           fs.unlinkSync(filePath);

@@ -1,15 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { PuppeteerService } from '../puppeteer/puppeteer.service';
-import { CoupangService } from '../coupang/coupang.service';
-import { Page } from 'puppeteer';
+import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
-import { OnchRepository } from '../onch/onch.repository';
-import { CoupangRepository } from '../coupang/coupang.repository';
+import { Page } from 'puppeteer';
+
 import { PriceRepository } from './price.repository';
-import { UtilService } from '../util/util.service';
 import { CronType } from '../../types/enum.types';
+import { CoupangRepository } from '../coupang/coupang.repository';
+import { CoupangService } from '../coupang/coupang.service';
+import { OnchRepository } from '../onch/onch.repository';
+import { PuppeteerService } from '../puppeteer/puppeteer.service';
+import { UtilService } from '../util/util.service';
 
 @Injectable()
 export class PriceService {
@@ -20,6 +22,7 @@ export class PriceService {
     private readonly coupangRepository: CoupangRepository,
     private readonly priceRepository: PriceRepository,
     private readonly utilService: UtilService,
+    private readonly configService: ConfigService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -296,7 +299,7 @@ export class PriceService {
   @Cron('0 3 * * *')
   async autoPriceCron(cronId?: string, retryCount = 0) {
     const currentCronId = cronId || this.utilService.generateCronId();
-    const isLocked = await this.redis.get('lock');
+    const isLocked = await this.redis.get(`lock:${this.configService.get<string>('STORE')}`);
 
     if (isLocked) {
       console.log(`${CronType.PRICE}${currentCronId}: 락 획득 실패-1분 후 재시도`);
@@ -305,7 +308,7 @@ export class PriceService {
     }
 
     try {
-      await this.redis.set('lock', 'locked');
+      await this.redis.set(`lock:${this.configService.get<string>('STORE')}`, 'locked');
       console.log(`${CronType.PRICE}${currentCronId}: 시작`);
 
       await this.crawlOnchRegisteredProducts(currentCronId);
@@ -318,7 +321,7 @@ export class PriceService {
         console.error(`${CronType.ERROR}${CronType.PRICE}${currentCronId}: 재시도 횟수 초과`);
       }
     } finally {
-      await this.redis.del('lock');
+      await this.redis.del(`lock:${this.configService.get<string>('STORE')}`);
       console.log(`${CronType.PRICE}${currentCronId}: 종료`);
     }
   }

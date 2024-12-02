@@ -8,7 +8,7 @@ async function bootstrap() {
   initializeTransactionalContext();
 
   const app = await NestFactory.create(AppModule);
-  await app.listen(9999);
+  await app.listen(process.env.SERVER_PORT);
   if (module.hot) {
     module.hot.accept();
     module.hot.dispose(() => app.close());

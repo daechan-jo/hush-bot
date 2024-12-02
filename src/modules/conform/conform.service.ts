@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
-import { PuppeteerService } from '../puppeteer/puppeteer.service';
-import { CoupangService } from '../coupang/coupang.service';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
-import { OnchService } from '../onch/onch.service';
-import { UtilService } from '../util/util.service';
+
 import { CronType } from '../../types/enum.types';
+import { CoupangService } from '../coupang/coupang.service';
+import { OnchService } from '../onch/onch.service';
+import { PuppeteerService } from '../puppeteer/puppeteer.service';
+import { UtilService } from '../util/util.service';
 
 @Injectable()
 export class ConformService {
@@ -15,6 +17,7 @@ export class ConformService {
     private readonly coupangService: CoupangService,
     private readonly onchService: OnchService,
     private readonly utilService: UtilService,
+    private readonly configService: ConfigService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -74,7 +77,7 @@ export class ConformService {
     const currentCronId = cronId || this.utilService.generateCronId();
     const MAX_RETRIES = 3;
 
-    const isLocked = await this.redis.get('lock');
+    const isLocked = await this.redis.get(`lock:${this.configService.get<string>('STORE')}`);
 
     if (isLocked) {
       console.log(`${CronType.CONFORM}${currentCronId}: 락 획득 실패-${retryCount + 1}번째 재시도`);
@@ -88,7 +91,7 @@ export class ConformService {
     }
 
     try {
-      await this.redis.set('lock', 'locked');
+      await this.redis.set(`lock:${this.configService.get<string>('STORE')}`, 'locked');
       console.log(`${CronType.CONFORM}${currentCronId}: 시작...`);
 
       await this.deleteConfirmedProducts(currentCronId);
@@ -101,7 +104,7 @@ export class ConformService {
         console.error(`${CronType.ERROR}${CronType.CONFORM}${currentCronId}: 재시도 횟수 초과`);
       }
     } finally {
-      await this.redis.del('lock');
+      await this.redis.del(`lock:${this.configService.get<string>('STORE')}`);
       console.log(`${CronType.CONFORM}${currentCronId}: 종료`);
     }
   }

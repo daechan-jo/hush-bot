@@ -1,7 +1,9 @@
-import * as nodemailer from 'nodemailer';
+import * as path from 'node:path';
+
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as path from 'node:path';
+import * as nodemailer from 'nodemailer';
+
 import { CronType } from '../../types/enum.types';
 
 @Injectable()
@@ -30,11 +32,12 @@ export class MailService {
     sellerProductId: number,
     productName: string,
     type: string,
+    store: string,
   ): Promise<void> {
     const mailOptions = {
       from: `"Hush-BOT"`,
       to: this.adminEmails,
-      subject: `${type} 상품 삭제 알림 - ${productName}`,
+      subject: `${type}-${store} 상품 삭제 알림 - ${productName}`,
       html: `
         <h3>상품 삭제 알림</h3>
         <p>아래 상품이 삭제되었습니다:</p>
@@ -56,6 +59,7 @@ export class MailService {
   async sendBatchDeletionEmail(
     deletedProducts: { sellerProductId: number; productName: string }[],
     type: string,
+    store: string,
   ): Promise<void> {
     const productListHtml = deletedProducts
       .map(
@@ -66,7 +70,7 @@ export class MailService {
     const mailOptions = {
       from: `"Hush-BOT"`,
       to: this.adminEmails,
-      subject: `${type} 상품 삭제 알림 - 총 ${deletedProducts.length}개 상품`,
+      subject: `${type}-${store} 상품 삭제 알림 - 총 ${deletedProducts.length}개 상품`,
       html: `
       <h3>상품 삭제 알림</h3>
       <p>아래 상품들이 삭제되었습니다:</p>
@@ -88,12 +92,13 @@ export class MailService {
     filePath: string,
     successCount: number,
     failedCount: number,
+    store: string,
   ): Promise<void> {
     const totalProducts = successCount + failedCount;
     const mailOptions = {
       from: `"Hush-BOT"`,
       to: this.adminEmails,
-      subject: `${CronType.PRICE} 자동 상품 가격 업데이트 안내`,
+      subject: `${CronType.PRICE}-${store} 자동 상품 가격 업데이트 안내`,
       html: `
         <h3>상품 업데이트 알림</h3>
         <ul>

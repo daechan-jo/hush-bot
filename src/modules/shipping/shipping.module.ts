@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { CoupangModule } from '../coupang/coupang.module';
+import { ConfigModule } from '@nestjs/config';
+
 import { ShippingService } from './shipping.service';
+import { CoupangModule } from '../coupang/coupang.module';
 import { UtilModule } from '../util/util.module';
 
 @Module({
-  imports: [CoupangModule, UtilModule],
+  imports: [ConfigModule, CoupangModule, UtilModule],
   providers: [ShippingService],
   exports: [ShippingService],
 })

@@ -1,13 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
-import { CoupangService } from '../coupang/coupang.service';
-import { PuppeteerService } from '../puppeteer/puppeteer.service';
-import { OnchService } from '../onch/onch.service';
-import { Page } from 'puppeteer';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
-import { UtilService } from '../util/util.service';
+import { Page } from 'puppeteer';
+
 import { CronType } from '../../types/enum.types';
+import { CoupangService } from '../coupang/coupang.service';
+import { OnchService } from '../onch/onch.service';
+import { PuppeteerService } from '../puppeteer/puppeteer.service';
+import { UtilService } from '../util/util.service';
 
 @Injectable()
 export class SoldoutService {
@@ -16,6 +18,7 @@ export class SoldoutService {
     private readonly coupangService: CoupangService,
     private readonly onchService: OnchService,
     private readonly utilService: UtilService,
+    private readonly configService: ConfigService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -33,7 +36,14 @@ export class SoldoutService {
         timeout: 0,
       },
     );
-    await onchPage.waitForSelector('td.title_4.sub_title', { timeout: 0 });
+
+    try {
+      await onchPage.waitForSelector('td.title_4.sub_title', { timeout: 3000 });
+    } catch (error) {
+      await this.redis.del(`lock${this.configService.get<string>('STORE')}`);
+      console.log(`${CronType.SOLDOUT}${cronId}: 데이터없음`);
+      console.log(`${CronType.SOLDOUT}${cronId}: 종료`);
+    }
 
     const lastCronTimeString = await this.redis.get('lastRun');
     const lastCronTime = lastCronTimeString ? new Date(lastCronTimeString) : null;
@@ -87,7 +97,7 @@ export class SoldoutService {
 
   @Cron('0 */5 * * * *')
   async soldOutCron() {
-    const isLocked = await this.redis.get('lock');
+    const isLocked = await this.redis.get(`lock:${this.configService.get<string>('STORE')}`);
     const cronId = this.utilService.generateCronId();
 
     if (isLocked) {
@@ -96,14 +106,14 @@ export class SoldoutService {
     }
 
     try {
-      await this.redis.set('lock', 'locked');
+      await this.redis.set(`lock${this.configService.get<string>('STORE')}`, 'locked');
       console.log(`${CronType.SOLDOUT}${cronId}: 시작`);
 
       await this.soldoutProductsManagement(cronId);
     } catch (error) {
       console.error(`${CronType.ERROR}${CronType.SOLDOUT}${cronId}:`, error);
     } finally {
-      await this.redis.del('lock');
+      await this.redis.del(`lock${this.configService.get<string>('STORE')}`);
       console.log(`${CronType.SOLDOUT}${cronId}: 종료`);
     }
   }
