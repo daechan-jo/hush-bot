@@ -4,4 +4,5 @@ export enum CronType {
   PRICE = `[🤖위너]`,
   ERROR = `❗️`,
   SHIPPING = `[🚚반품]`,
+  ORDER = `[💰발주]`,
 }

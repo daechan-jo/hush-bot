@@ -97,23 +97,24 @@ export class SoldoutService {
 
   @Cron('0 */5 * * * *')
   async soldOutCron() {
-    const isLocked = await this.redis.get(`lock:${this.configService.get<string>('STORE')}`);
+    const lockKey = `lock:${this.configService.get<string>('STORE')}`;
+    const lockValue = Date.now().toString();
     const cronId = this.utilService.generateCronId();
 
-    if (isLocked) {
+    const isLocked = await this.redis.set(lockKey, lockValue, 'NX');
+    if (!isLocked) {
       console.log(`${CronType.SOLDOUT}${cronId}: 락 획득 실패`);
       return;
     }
 
     try {
-      await this.redis.set(`lock${this.configService.get<string>('STORE')}`, 'locked');
       console.log(`${CronType.SOLDOUT}${cronId}: 시작`);
 
       await this.soldoutProductsManagement(cronId);
     } catch (error) {
       console.error(`${CronType.ERROR}${CronType.SOLDOUT}${cronId}:`, error);
     } finally {
-      await this.redis.del(`lock${this.configService.get<string>('STORE')}`);
+      await this.redis.del(lockKey);
       console.log(`${CronType.SOLDOUT}${cronId}: 종료`);
     }
   }

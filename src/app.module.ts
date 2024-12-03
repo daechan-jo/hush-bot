@@ -16,6 +16,8 @@ import { CoupangRepository } from './modules/coupang/coupang.repository';
 import { CoupangService } from './modules/coupang/coupang.service';
 import { OnchModule } from './modules/onch/onch.module';
 import { OnchRepository } from './modules/onch/onch.repository';
+import { OrderModule } from './modules/order/order.module';
+import { OrderService } from './modules/order/order.service';
 import { PriceModule } from './modules/price/price.module';
 import { PriceService } from './modules/price/price.service';
 import { PuppeteerModule } from './modules/puppeteer/puppeteer.module';
@@ -45,6 +47,7 @@ import { UtilModule } from './modules/util/util.module';
     OnchModule,
     UtilModule,
     ShippingModule,
+    OrderModule,
   ],
   providers: [],
 })
@@ -59,6 +62,7 @@ export class AppModule implements OnApplicationBootstrap {
     private readonly coupangService: CoupangService,
     private readonly shippingService: ShippingService,
     private readonly configService: ConfigService,
+    private readonly orderService: OrderService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -69,6 +73,7 @@ export class AppModule implements OnApplicationBootstrap {
 
     setTimeout(async () => {
       await this.puppeteerService.init();
+      // await this.orderService.OrderCron();
       // await this.soldoutService.soldOutCron();
       // await this.conformService.conformCron();
       // await this.shippingService.shippingCostCron();

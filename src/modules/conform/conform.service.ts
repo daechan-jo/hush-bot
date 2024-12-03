@@ -74,12 +74,14 @@ export class ConformService {
 
   @Cron('0 */27 * * * *')
   async conformCron(retryCount = 0, cronId?: string) {
+    const lockKey = `lock:${this.configService.get<string>('STORE')}`;
+    const lockValue = Date.now().toString();
     const currentCronId = cronId || this.utilService.generateCronId();
     const MAX_RETRIES = 3;
 
-    const isLocked = await this.redis.get(`lock:${this.configService.get<string>('STORE')}`);
+    const isLocked = await this.redis.set(lockKey, lockValue, 'NX');
 
-    if (isLocked) {
+    if (!isLocked) {
       console.log(`${CronType.CONFORM}${currentCronId}: 락 획득 실패-${retryCount + 1}번째 재시도`);
 
       if (retryCount < MAX_RETRIES - 1) {
@@ -91,7 +93,6 @@ export class ConformService {
     }
 
     try {
-      await this.redis.set(`lock:${this.configService.get<string>('STORE')}`, 'locked');
       console.log(`${CronType.CONFORM}${currentCronId}: 시작...`);
 
       await this.deleteConfirmedProducts(currentCronId);

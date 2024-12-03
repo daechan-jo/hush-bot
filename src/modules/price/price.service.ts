@@ -296,19 +296,21 @@ export class PriceService {
     }
   }
 
-  @Cron('0 3 * * *')
+  @Cron('0 3 1 * *')
   async autoPriceCron(cronId?: string, retryCount = 0) {
+    const lockKey = `lock:${this.configService.get<string>('STORE')}`;
+    const lockValue = Date.now().toString();
     const currentCronId = cronId || this.utilService.generateCronId();
-    const isLocked = await this.redis.get(`lock:${this.configService.get<string>('STORE')}`);
 
-    if (isLocked) {
+    const isLocked = await this.redis.set(lockKey, lockValue, 'NX');
+
+    if (!isLocked) {
       console.log(`${CronType.PRICE}${currentCronId}: 락 획득 실패-1분 후 재시도`);
       setTimeout(() => this.autoPriceCron(currentCronId), 60000);
       return;
     }
 
     try {
-      await this.redis.set(`lock:${this.configService.get<string>('STORE')}`, 'locked');
       console.log(`${CronType.PRICE}${currentCronId}: 시작`);
 
       await this.crawlOnchRegisteredProducts(currentCronId);

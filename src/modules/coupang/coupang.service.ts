@@ -54,6 +54,21 @@ export class CoupangService {
     return { authorization, datetime };
   }
 
+  async createParamHmacSignature(method: string, path: string, params: Record<string, any>) {
+    const datetime =
+      new Date().toISOString().substr(2, 17).replace(/:/gi, '').replace(/-/gi, '') + 'Z';
+
+    const query = new URLSearchParams(params).toString(); // params로 queryString 생성
+
+    const message = datetime + method + path + query;
+
+    const signature = crypto.createHmac('sha256', this.secretKey).update(message).digest('hex');
+
+    const authorization = `CEA algorithm=HmacSHA256, access-key=${this.accessKey}, signed-date=${datetime}, signature=${signature}`;
+
+    return { authorization, datetime };
+  }
+
   async fetchCoupangSellerProducts(cronId: string, type: string) {
     const apiPath = '/v2/providers/seller_api/apis/api/v1/marketplace/seller-products';
 
@@ -122,6 +137,56 @@ export class CoupangService {
         error.response?.data || error.message,
       );
       throw new Error('쿠팡 상품 상세 조회 실패');
+    }
+  }
+
+  async getCoupangOrderList(cronId: string, type: string, vendorId: string, today: string) {
+    const apiPath = `/v2/providers/openapi/apis/api/v4/vendors/${vendorId}/ordersheets`;
+
+    let nextToken = '';
+    const allProducts = [];
+    try {
+      while (true) {
+        const { authorization, datetime } = await this.createParamHmacSignature('GET', apiPath, {
+          vendorId,
+          createdAtFrom: today,
+          createdAtTo: today,
+          status: 'ACCEPT',
+          nextToken: nextToken,
+          maxPerPage: 50,
+        });
+
+        const response = await axios.get(`https://api-gateway.coupang.com${apiPath}`, {
+          headers: {
+            Authorization: authorization,
+            'Content-Type': 'application/json;charset=UTF-8',
+            'X-EXTENDED-TIMEOUT': '90000',
+            'X-Coupang-Date': datetime,
+          },
+          params: {
+            vendorId: this.vendorId,
+            createdAtFrom: today,
+            createdAtTo: today,
+            status: 'ACCEPT',
+            nextToken: nextToken,
+            maxPerPage: 50,
+          },
+        });
+
+        const { data } = response.data;
+        allProducts.push(...data);
+
+        nextToken = response.data.nextToken;
+        if (!nextToken) break;
+      }
+
+      return allProducts;
+    } catch (error) {
+      console.error(
+        `${CronType.ERROR}${type}${cronId}: API 요청 오류:`,
+        error.response?.data || error.message,
+      );
+      throw new Error('쿠팡 API 요청 실패');
     }
   }
 
@@ -373,6 +438,7 @@ export class CoupangService {
         );
         failedCount++;
       }
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
 
     console.log(
