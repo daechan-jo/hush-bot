@@ -5,6 +5,7 @@ import Redis from 'ioredis';
 
 import { CronType } from '../../types/enum.types';
 import { CoupangService } from '../coupang/coupang.service';
+import { MailService } from '../mail/mail.service';
 import { UtilService } from '../util/util.service';
 
 export class ShippingService {
@@ -12,10 +13,11 @@ export class ShippingService {
     private readonly coupangService: CoupangService,
     private readonly utilService: UtilService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
-  @Cron('0 0 1 * * *')
+  @Cron('0 0 * * * *')
   async shippingCostCron(cronId?: string, retryCount = 0) {
     const lockKey = `lock:${this.configService.get<string>('STORE')}`;
     const lockValue = Date.now().toString();
@@ -37,6 +39,11 @@ export class ShippingService {
         console.log(`${CronType.SHIPPING}${currentCronId}: ${retryCount + 1}번째 재시도 예정`);
         setTimeout(() => this.shippingCostCron(currentCronId, retryCount + 1), 3000);
       } else {
+        await this.mailService.sendErrorMail(
+          CronType.ORDER,
+          this.configService.get<string>('STORE'),
+          currentCronId,
+        );
         console.error(`${CronType.ERROR}${CronType.SHIPPING}${currentCronId}: 재시도 횟수 초과`);
       }
     } finally {

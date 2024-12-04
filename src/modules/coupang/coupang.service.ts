@@ -5,6 +5,7 @@ import * as path from 'path';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import { Page } from 'puppeteer';
 import * as XLSX from 'xlsx';
 
 import { CronType } from '../../types/enum.types';
@@ -140,7 +141,13 @@ export class CoupangService {
     }
   }
 
-  async getCoupangOrderList(cronId: string, type: string, vendorId: string, today: string) {
+  async getCoupangOrderList(
+    cronId: string,
+    type: string,
+    vendorId: string,
+    today: string,
+    yesterday: string,
+  ) {
     const apiPath = `/v2/providers/openapi/apis/api/v4/vendors/${vendorId}/ordersheets`;
 
     let nextToken = '';
@@ -149,7 +156,7 @@ export class CoupangService {
       while (true) {
         const { authorization, datetime } = await this.createParamHmacSignature('GET', apiPath, {
           vendorId,
-          createdAtFrom: today,
+          createdAtFrom: yesterday,
           createdAtTo: today,
           status: 'ACCEPT',
           nextToken: nextToken,
@@ -165,7 +172,7 @@ export class CoupangService {
           },
           params: {
             vendorId: this.vendorId,
-            createdAtFrom: today,
+            createdAtFrom: yesterday,
             createdAtTo: today,
             status: 'ACCEPT',
             nextToken: nextToken,
@@ -396,11 +403,14 @@ export class CoupangService {
     console.log(`${CronType.SHIPPING}${cronId}: 반품 배송비 관리 시작...`);
 
     const coupangProducts = await this.fetchCoupangSellerProducts(cronId, CronType.SHIPPING);
+    // todo 여기에는 반품배송정보가 없음. 별도로 다시 조회요청해야함.
 
     let successCount = 0;
     let failedCount = 0;
 
-    const productsToUpdate = coupangProducts.filter((product) => product.returnCharge !== 10000);
+    const productsToUpdate = coupangProducts.filter(
+      (product) => product.returnCharge !== '7000' || 7000,
+    );
 
     if (productsToUpdate.length === 0) {
       console.log(
@@ -412,7 +422,7 @@ export class CoupangService {
 
     for (const product of productsToUpdate) {
       const updatePath = `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/${product.sellerProductId}/partial`;
-      const body = { sellerProductId: product.sellerProductId, returnCharge: 10000 };
+      const body = { sellerProductId: product.sellerProductId, returnCharge: 7000 };
 
       try {
         const { authorization, datetime } = await this.createHmacSignature(
@@ -444,5 +454,63 @@ export class CoupangService {
     console.log(
       `${CronType.SHIPPING}${cronId}: 반품 배송비 관리 완료\n성공 ${successCount}개, 실패 ${failedCount}개`,
     );
+  }
+
+  async orderStatusUpdate(coupangPage: Page) {
+    await coupangPage.goto('https://wing.coupang.com/tenants/sfl-portal/delivery/management', {
+      timeout: 0,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const checkboxSelector =
+      '.search-table tbody span[data-wuic-props="name:check"] input[type="checkbox"]';
+
+    const checkboxes = await coupangPage.$$(checkboxSelector);
+
+    if (checkboxes.length === 0) {
+      console.error('체크박스를 찾을 수 없습니다.');
+      return;
+    }
+
+    // 각 체크박스를 순회하며 클릭
+    for (const checkbox of checkboxes) {
+      const isDisabled = await checkbox.evaluate((el) => el.disabled);
+      if (isDisabled) {
+        await checkbox.evaluate((el) => el.removeAttribute('disabled'));
+      }
+
+      // 체크박스 클릭
+      await checkbox.evaluate((el) => el.click());
+    }
+    // 주문 확인 버튼 클릭
+    const confirmOrderButtonSelector = '#confirmOrder'; // 버튼 ID로 선택
+    await coupangPage.waitForSelector(confirmOrderButtonSelector); // 버튼 요소 기다리기
+    await coupangPage.click(confirmOrderButtonSelector);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // 2. `select` 태그 선택 및 값 변경
+    await coupangPage.waitForSelector('select[data-v-305197cb]');
+    await coupangPage.select('select[data-v-305197cb]', 'CJGLS'); // CJ 대한통운 선택
+
+    // 3. `textarea`에 텍스트 입력
+    await coupangPage.waitForSelector('textarea[placeholder="Enter reason in detail"]');
+    await coupangPage.type('textarea[placeholder="Enter reason in detail"]', '상품을 준비합니다');
+
+    // 4. `Download` 버튼 클릭
+    const downloadButtonSelector =
+      'button#submitConfirm[style="float: right; margin: 0px 0px 0px 8px; padding: 6px 16px 8px;"][data-wuic-props*="icon-name:download"]';
+
+    await coupangPage.evaluate((downloadButtonSelector) => {
+      const button = document.querySelector(downloadButtonSelector) as HTMLElement;
+      if (button) {
+        button.click();
+      } else {
+        console.error('버튼을 찾을 수 없습니다.');
+      }
+    }, downloadButtonSelector);
+
+    return coupangPage;
   }
 }

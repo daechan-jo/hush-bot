@@ -122,4 +122,68 @@ export class MailService {
       console.error(`자동 상품 가격 업데이트 알림 이메일 발송 실패:`, error.message);
     }
   }
+
+  async sendSuccessOrders(result: any[], store: string) {
+    const itemsHtml = result
+      .map(
+        (order) =>
+          `<li>주문번호: ${order.orderId}, 주문인: ${order.ordererName}, 수취인: ${order.receiverName}, 상품: ${order.sellerProductName}, 옵션: ${order.sellerProductItemName}, 수량: ${order.shippingCount}</li>`,
+      )
+      .join('');
+
+    const mailOptions = {
+      from: `"Hush-BOT"`,
+      to: this.adminEmails,
+      subject: `${CronType.ORDER}-${store} 자동 발주 안내`,
+      html: `
+        <h3>발주 알림</h3>
+        <ul>
+          ${itemsHtml}
+        </ul>
+      `,
+    };
+
+    await this.transporter.sendMail(mailOptions);
+  }
+
+  async sendFailedOrders(result: any[], store: string) {
+    const itemsHtml = result
+      .map(
+        (order) =>
+          `<li>주문번호: ${order.orderId}, 주문인: ${order.ordererName}, 수취인: ${order.receiverName}, 상품: ${order.sellerProductName}, 옵션: ${order.sellerProductItemName}, 수량: ${order.shippingCount}</li>`,
+      )
+      .join('');
+
+    const mailOptions = {
+      from: `"Hush-BOT"`,
+      to: this.adminEmails,
+      subject: `${CronType.ORDER}-${store} 자동 발주 실패 안내`,
+      html: `
+        <h3>발주 실패 알림</h3>
+        <ul>
+          ${itemsHtml}
+        </ul>
+      `,
+    };
+
+    await this.transporter.sendMail(mailOptions);
+  }
+
+  async sendErrorMail(cronType: CronType, store: string, currentCronId: string) {
+    const mailOptions = {
+      from: `"Hush-BOT"`,
+      to: this.adminEmails,
+      subject: `${CronType.ERROR}${cronType}-${store} 에러 안내`,
+      html: `
+        <h3>크론작업 실패 - 확인요망</h3>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log(`에러 알림 이메일 발송 성공`);
+    } catch (error) {
+      console.error(`에러 알림 이메일 발송 실패:`, error.message);
+    }
+  }
 }

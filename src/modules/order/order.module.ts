@@ -7,6 +7,7 @@ import { CronVersion } from '../../entities/cronVersion.entity';
 import { OnchProduct } from '../../entities/onchProduct.entity';
 import { UpdatedProduct } from '../../entities/updatedProduct.entity';
 import { CoupangModule } from '../coupang/coupang.module';
+import { MailModule } from '../mail/mail.module';
 import { OnchModule } from '../onch/onch.module';
 import { PuppeteerModule } from '../puppeteer/puppeteer.module';
 import { UtilModule } from '../util/util.module';
@@ -19,6 +20,7 @@ import { UtilModule } from '../util/util.module';
     UtilModule,
     forwardRef(() => CoupangModule),
     OnchModule,
+    MailModule,
   ],
   providers: [OrderService],
   exports: [OrderService],

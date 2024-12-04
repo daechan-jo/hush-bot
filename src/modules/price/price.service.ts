@@ -9,6 +9,7 @@ import { PriceRepository } from './price.repository';
 import { CronType } from '../../types/enum.types';
 import { CoupangRepository } from '../coupang/coupang.repository';
 import { CoupangService } from '../coupang/coupang.service';
+import { MailService } from '../mail/mail.service';
 import { OnchRepository } from '../onch/onch.repository';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
 import { UtilService } from '../util/util.service';
@@ -23,6 +24,7 @@ export class PriceService {
     private readonly priceRepository: PriceRepository,
     private readonly utilService: UtilService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -296,7 +298,7 @@ export class PriceService {
     }
   }
 
-  @Cron('0 3 1 * *')
+  @Cron('0 0 3 * * *')
   async autoPriceCron(cronId?: string, retryCount = 0) {
     const lockKey = `lock:${this.configService.get<string>('STORE')}`;
     const lockValue = Date.now().toString();
@@ -320,6 +322,11 @@ export class PriceService {
         console.log(`${CronType.PRICE}${currentCronId}: ${retryCount + 1}번째 재시도 예정`);
         setTimeout(() => this.autoPriceCron(cronId, retryCount + 1), 3000);
       } else {
+        await this.mailService.sendErrorMail(
+          CronType.ORDER,
+          this.configService.get<string>('STORE'),
+          currentCronId,
+        );
         console.error(`${CronType.ERROR}${CronType.PRICE}${currentCronId}: 재시도 횟수 초과`);
       }
     } finally {

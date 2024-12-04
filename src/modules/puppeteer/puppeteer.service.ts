@@ -14,7 +14,7 @@ export class PuppeteerService {
 
   async init() {
     this.browser = await puppeteer.launch({
-      headless: true,
+      headless: this.configService.get<string>('STORE') !== 'test',
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
       timeout: 0,
     });

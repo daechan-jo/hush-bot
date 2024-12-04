@@ -6,6 +6,7 @@ import Redis from 'ioredis';
 
 import { CronType } from '../../types/enum.types';
 import { CoupangService } from '../coupang/coupang.service';
+import { MailService } from '../mail/mail.service';
 import { OnchService } from '../onch/onch.service';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
 import { UtilService } from '../util/util.service';
@@ -18,6 +19,7 @@ export class ConformService {
     private readonly onchService: OnchService,
     private readonly utilService: UtilService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -72,7 +74,7 @@ export class ConformService {
     await this.puppeteerService.closeAllPages();
   }
 
-  @Cron('0 */27 * * * *')
+  @Cron('0 */20 * * * *')
   async conformCron(retryCount = 0, cronId?: string) {
     const lockKey = `lock:${this.configService.get<string>('STORE')}`;
     const lockValue = Date.now().toString();
@@ -103,6 +105,11 @@ export class ConformService {
         setTimeout(() => this.conformCron(retryCount + 1, cronId), 3000);
       } else {
         console.error(`${CronType.ERROR}${CronType.CONFORM}${currentCronId}: 재시도 횟수 초과`);
+        await this.mailService.sendErrorMail(
+          CronType.ORDER,
+          this.configService.get<string>('STORE'),
+          currentCronId,
+        );
       }
     } finally {
       await this.redis.del(`lock:${this.configService.get<string>('STORE')}`);
