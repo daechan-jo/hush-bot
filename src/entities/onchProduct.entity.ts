@@ -1,12 +1,19 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, OneToMany } from 'typeorm';
 
-@Entity()
+import { OnchItem } from './onchItem.entity';
+
+@Entity({ name: 'onch_product' })
 export class OnchProduct {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ name: 'product_code', type: 'varchar', length: 255, nullable: true })
   productCode: string;
+
+  @OneToMany(() => OnchItem, (onchItem) => onchItem.onchProduct, {
+    cascade: true,
+  })
+  onchItems: OnchItem[];
 
   @Column({ name: 'consumer_price', type: 'int', nullable: true })
   consumerPrice: number;

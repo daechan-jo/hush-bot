@@ -1,11 +1,13 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+
 import { OnchProduct } from '../../entities/onchProduct.entity';
 
 export class OnchRepository {
   constructor(
     @InjectRepository(OnchProduct)
     private readonly onchRepository: Repository<OnchProduct>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async saveOnchProductDetails(details: OnchProduct[]) {
@@ -17,6 +19,6 @@ export class OnchRepository {
   }
 
   async clearOnchProducts() {
-    return await this.onchRepository.clear();
+    return await this.dataSource.query('TRUNCATE TABLE "onch_product" CASCADE');
   }
 }

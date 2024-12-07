@@ -6,15 +6,16 @@ import {
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+
 import { CronVersion } from './cronVersion.entity';
 
 @Entity()
-export class UpdatedProduct {
+export class UpdatedItem {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'seller_product_id', type: 'varchar', length: 255, nullable: true })
-  sellerProductId: string;
+  @Column({ name: 'vendor_item_id', type: 'varchar', length: 255, nullable: true })
+  vendorItemId: string;
 
   @Column({ name: 'product_code', type: 'varchar', length: 255, nullable: true })
   productCode: string;
@@ -32,7 +33,7 @@ export class UpdatedProduct {
   currentIsWinner: boolean;
 
   @Index()
-  @ManyToOne(() => CronVersion, (cronVersion) => cronVersion.updatedProducts, { nullable: false })
+  @ManyToOne(() => CronVersion, (cronVersion) => cronVersion.updatedItems, { nullable: false })
   cronVersion: CronVersion;
 
   @CreateDateColumn({ name: 'created_at' })

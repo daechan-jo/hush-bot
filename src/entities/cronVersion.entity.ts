@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
-import { UpdatedProduct } from './updatedProduct.entity';
+
+import { UpdatedItem } from './updatedItem.entity';
 
 @Entity()
 export class CronVersion {
@@ -12,6 +13,6 @@ export class CronVersion {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @OneToMany(() => UpdatedProduct, (updatedProduct) => updatedProduct.cronVersion)
-  updatedProducts: UpdatedProduct[];
+  @OneToMany(() => UpdatedItem, (updatedItem) => updatedItem.cronVersion)
+  updatedItems: UpdatedItem[];
 }

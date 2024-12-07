@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrderService } from './order.service';
 import { CronVersion } from '../../entities/cronVersion.entity';
 import { OnchProduct } from '../../entities/onchProduct.entity';
-import { UpdatedProduct } from '../../entities/updatedProduct.entity';
+import { UpdatedItem } from '../../entities/updatedItem.entity';
 import { CoupangModule } from '../coupang/coupang.module';
 import { MailModule } from '../mail/mail.module';
 import { OnchModule } from '../onch/onch.module';
@@ -14,7 +14,7 @@ import { UtilModule } from '../util/util.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([OnchProduct, UpdatedProduct, CronVersion]),
+    TypeOrmModule.forFeature([OnchProduct, UpdatedItem, CronVersion]),
     ConfigModule,
     PuppeteerModule,
     UtilModule,

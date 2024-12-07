@@ -88,6 +88,9 @@ export class PriceService {
             ?.textContent?.trim()
             .replace(/[^0-9]/g, '');
 
+        const getOptionTextContent = (element: Element, selector: string) =>
+          element.querySelector(selector)?.textContent?.trim() || '';
+
         const productCodeElement = Array.from(document.querySelectorAll('li')).find((li) =>
           li.querySelector('.prod_detail_title')?.textContent?.includes('제품코드'),
         );
@@ -109,11 +112,31 @@ export class PriceService {
         const shippingCostMatch = shippingCostText.match(/일반\s([\d,]+)원/);
         const shippingCost = shippingCostMatch ? shippingCostMatch[1].replace(/,/g, '') : 0;
 
+        const onchItems = Array.from(document.querySelectorAll('ul li'))
+          .filter((li) => li.querySelector('.detail_page_name')) // 옵션명이 존재하는 li만 포함
+          .map((li) => {
+            const optionName = getOptionTextContent(li, '.detail_page_name');
+            const consumerPrice = getOptionTextContent(li, '.detail_page_price_2').replace(
+              /[^0-9]/g,
+              '',
+            );
+            const sellerPrice = getOptionTextContent(li, '.detail_page_price_3').replace(
+              /[^0-9]/g,
+              '',
+            );
+            return {
+              itemName: optionName,
+              consumerPrice: consumerPrice || null,
+              sellerPrice: sellerPrice || null,
+            };
+          });
+
         return {
           productCode,
           consumerPrice,
           sellerPrice,
           shippingCost,
+          onchItems,
         };
       });
 
@@ -130,6 +153,7 @@ export class PriceService {
     }
 
     console.log(`${CronType.PRICE}${cronId}: 온채널 판매상품 상세정보 크롤링 완료`);
+
     await this.crawlCoupangDetailProducts(cronId, onchPage);
   }
 
@@ -210,18 +234,124 @@ export class PriceService {
     }
     await this.puppeteerService.closeAllPages();
 
-    return await this.calculateMarginAndAdjustPrices(cronId);
+    return await this.testCalculateMarginAndAdjustPrices(cronId);
   }
 
+  async testCalculateMarginAndAdjustPrices(cronId: string) {
+    console.log(`${CronType.PRICE}${cronId}: 새로운 판매가 연산 시작...`);
+
+    const productsBatch = [];
+
+    const cronVersionId = await this.priceRepository.createCronVersion(cronId);
+    const products: any[] = await this.priceRepository.getProducts();
+
+    // 각 상품에 대한 가격 조정 계산 = 아이템에 대한 가격 조정을 해야함
+    // 문제는 쿠팡 크롤링으로 조회한 상품에 각 아이템에 대한 정보가 없음.
+    for (const product of products) {
+      const coupangDetail = await this.coupangService.fetchCoupangProductDetails(
+        cronId,
+        CronType.PRICE,
+        product.sellerProductId,
+      );
+
+      const coupangItems = coupangDetail.data.items;
+
+      for (const onchItem of product.onchItems) {
+        const matchedCoupangItem = coupangItems.find(
+          (coupangItem: any) => coupangItem.itemName.trim() === onchItem.itemName.trim(),
+        );
+
+        if (matchedCoupangItem) {
+          const processedData = {
+            vendorItemId: matchedCoupangItem.vendorItemId,
+            optionName: onchItem.optionName,
+            coupangSalePrice: +matchedCoupangItem.salePrice,
+            onchSellerPrice: +onchItem.sellerPrice,
+            onchConsumerPrice: +onchItem.consumerPrice,
+            coupangShippingCost: +product.coupangShippingCost,
+            onchSippingCost: product.onchSippingCost,
+            coupangIsWinner: product.coupangIsWinner,
+          };
+
+          const salePrice = Math.round(
+            +product.coupangSalePrice -
+              +product.coupangSalePrice / 10.8 +
+              +processedData.coupangShippingCost,
+          ); // 판매수익
+          const wholesalePrice = +processedData.onchSellerPrice + +processedData.onchSippingCost; // 도매비용
+          const netProfit = salePrice - wholesalePrice; // 순수익
+          const margin = Math.round(wholesalePrice * 0.07); // 목표마진(최소)
+
+          processedData.coupangIsWinner = false;
+
+          if (netProfit > margin && !processedData.coupangIsWinner) {
+            const requiredDecreaseInRevenue = netProfit - margin;
+            const adjustedTotalRevenue = salePrice - requiredDecreaseInRevenue;
+
+            const newPrice = Math.round(
+              ((adjustedTotalRevenue - +product.coupangShippingCost) * 10.8) / 9.8,
+            );
+
+            const roundedPrice = Math.round(newPrice / 10) * 10;
+
+            if (newPrice < +processedData.coupangSalePrice) {
+              productsBatch.push({
+                vendorItemId: processedData.vendorItemId,
+                productCode: product.coupangProductCode,
+                action: 'down',
+                newPrice: roundedPrice,
+                currentPrice: product.coupangPrice,
+                currentIsWinner: product.coupangIsWinner,
+              });
+            }
+            console.log(productsBatch);
+          } else if (netProfit < margin) {
+            const requiredIncreaseInRevenue = margin - netProfit; // 필요한 추가 수익
+            const adjustedTotalRevenue = salePrice + requiredIncreaseInRevenue; // 수정된 총수익
+
+            const newPrice = Math.round(
+              ((adjustedTotalRevenue - +product.coupangShippingCost) * 10.8) / 9.8,
+            );
+
+            const roundedPrice = Math.round(newPrice / 10) * 10;
+
+            if (newPrice > +processedData.coupangSalePrice) {
+              productsBatch.push({
+                vendorItemId: processedData.vendorItemId,
+                productCode: product.coupangProductCode,
+                action: 'down',
+                newPrice: roundedPrice,
+                currentPrice: product.coupangPrice,
+                currentIsWinner: product.coupangIsWinner,
+              });
+            }
+          }
+
+          if (productsBatch.length >= 50) {
+            await this.priceRepository.saveUpdateItems(productsBatch, cronVersionId);
+            productsBatch.length = 0;
+          }
+        }
+      }
+      if (productsBatch.length > 0) {
+        await this.priceRepository.saveUpdateItems(productsBatch, cronVersionId);
+      }
+
+      console.log(`${CronType.PRICE}${cronId}: 연산 종료`);
+    }
+  }
+
+  // 원래는, 온채널과 쿠팡 상품을 교집합해서 일치하는 상품들만 추려내고, 상품가격을 한번에 업데이트함.
   async calculateMarginAndAdjustPrices(cronId: string) {
     console.log(`${CronType.PRICE}${cronId}: 새로운 판매가 연산 시작...`);
 
     const cronVersionId = await this.priceRepository.createCronVersion(cronId);
 
-    const products = await this.priceRepository.getProducts();
+    const products: any[] = await this.priceRepository.getProducts();
+
     const productsBatch = [];
 
-    // 각 상품에 대한 가격 조정 계산
+    // 각 상품에 대한 가격 조정 계산 = 아이템에 대한 가격 조정을 해야함
     for (const product of products) {
       const salePrice = Math.round(
         +product.coupangPrice - +product.coupangPrice / 10.8 + +product.coupangShippingCost,
@@ -273,13 +403,13 @@ export class PriceService {
       }
 
       if (productsBatch.length >= 50) {
-        await this.priceRepository.saveUpdateProducts(productsBatch, cronVersionId);
+        await this.priceRepository.saveUpdateItems(productsBatch, cronVersionId);
         productsBatch.length = 0;
       }
     }
 
     if (productsBatch.length > 0) {
-      await this.priceRepository.saveUpdateProducts(productsBatch, cronVersionId);
+      await this.priceRepository.saveUpdateItems(productsBatch, cronVersionId);
     }
 
     console.log(`${CronType.PRICE}${cronId}: 연산 종료`);

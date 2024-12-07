@@ -306,15 +306,15 @@ export class CoupangService {
 
     let successCount = 0;
     let failedCount = 0;
-    const updatedProducts = await this.priceRepository.getUpdatedProducts(cronVersionId);
+    const updatedItems = await this.priceRepository.getUpdatedItems(cronVersionId);
 
-    for (const product of updatedProducts) {
+    for (const product of updatedItems) {
       try {
         // sellerProductId로 쿠팡 상품 상세 정보 가져오기
         const productDetail = await this.fetchCoupangProductDetails(
           cronId,
           CronType.PRICE,
-          +product.sellerProductId,
+          +product.vendorItemId,
         );
 
         // items 배열에서 각 vendorItemId를 추출하여 가격 업데이트
@@ -360,7 +360,7 @@ export class CoupangService {
       }
     }
 
-    const excelData = updatedProducts.map((product) => ({
+    const excelData = updatedItems.map((product) => ({
       'Seller Product ID': product.sellerProductId,
       'Product Code': product.productCode,
       Action: product.action,

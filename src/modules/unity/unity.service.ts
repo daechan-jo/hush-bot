@@ -24,7 +24,7 @@ export class UnityService {
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
-  @Cron('0 */5 * * * *')
+  // @Cron('0 */5 * * * *')
   async unityCron() {
     const lockKey = `lock:${this.configService.get<string>('STORE')}`;
     const lockValue = Date.now().toString();
