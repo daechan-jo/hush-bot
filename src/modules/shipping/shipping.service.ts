@@ -51,17 +51,11 @@ export class ShippingService {
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const dates = await onchPage.$$eval('.prd_list_li', (elements) => {
-      return elements.map((row) => {
-        // 날짜 요소 추출
-        const dateElement = row.querySelector('.prd_list_date font[color="#135bc8"]');
-        return dateElement ? dateElement.textContent.trim() : null;
-      });
+    console.log(`${CronType.SHIPPING}${cronId}: 운송장 추출 시작`);
+
+    onchPage.on('console', (msg) => {
+      console.log('PAGE LOG:', msg.text());
     });
-
-    console.log(`${CronType.SHIPPING}${cronId}: 추출된 날짜들:`, dates);
-
-    await this.puppeteerService.closeAllPages();
 
     const rows = await onchPage.$$eval(
       '.prd_list_li',
@@ -70,11 +64,15 @@ export class ShippingService {
           .map((row) => {
             // 날짜 가져오기
             const dateElement = row.querySelector('.prd_list_date font[color="#135bc8"]');
-            if (!dateElement) return null;
+            if (!dateElement) return;
 
             const dateText = dateElement.textContent.trim();
-            const rowDate = new Date(dateText);
-            if (rowDate <= new Date(lastCronTime)) return null;
+
+            const formattedDateText = `${dateText.slice(0, 10)}T${dateText.slice(10)}`;
+
+            const rowDate = new Date(formattedDateText);
+
+            if (rowDate <= new Date(lastCronTime)) return;
 
             // 필요한 데이터 추출
             const nameElement = row.querySelector('.prd_list_name div');
@@ -109,9 +107,16 @@ export class ShippingService {
           })
           .filter(Boolean);
       },
-      lastCronTime.toISOString(),
+      lastCronTime,
       courierNames,
     );
+
+    await this.puppeteerService.closeAllPages();
+
+    if (rows.length === 0) {
+      console.log(`${CronType.SHIPPING}${cronId}: 새로 등록된 운송장이 없습니다.`);
+      return;
+    }
 
     // 쿠팡에서 발주정보 조회
     const today = moment().format('YYYY-MM-DD');
@@ -193,16 +198,16 @@ export class ShippingService {
     }
   }
 
-  async shippingCron(cronId: string, retryCount = 1) {
+  async attemptShipping(cronId: string, retryCount = 1) {
     try {
       const nowTime = moment().format('HH:mm:ss');
-      console.log(`${CronType.SHIPPING}${cronId}-${nowTime}: 배송 크론 시작`);
+      console.log(`${CronType.SHIPPING}${cronId}-${nowTime}: 운송장 등록 시작`);
 
       await this.waybillManagement(cronId);
     } catch (error) {
       if (retryCount < 10) {
         console.log(`${CronType.SHIPPING}${cronId}: ${retryCount + 1}번째 재시도 예정`);
-        setTimeout(() => this.shippingCron(cronId, retryCount + 1), 3000);
+        setTimeout(() => this.attemptShipping(cronId, retryCount + 1));
       } else {
         await this.mailService.sendErrorMail(
           CronType.SHIPPING,
@@ -211,8 +216,14 @@ export class ShippingService {
         );
         console.error(`${CronType.ERROR}${CronType.SHIPPING}${cronId}: 재시도 횟수 초과`);
       }
+    }
+  }
+
+  async shippingCron(cronId: string) {
+    try {
+      await this.attemptShipping(cronId);
     } finally {
-      console.log(`${CronType.SHIPPING}${cronId}: 배송 작업 종료`);
+      console.log(`${CronType.SHIPPING}${cronId}: 운송장 등록 종료`);
     }
   }
 }

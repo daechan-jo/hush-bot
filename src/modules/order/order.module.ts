@@ -21,6 +21,7 @@ import { UtilModule } from '../util/util.module';
     forwardRef(() => CoupangModule),
     OnchModule,
     MailModule,
+    UtilModule,
   ],
   providers: [OrderService],
   exports: [OrderService],

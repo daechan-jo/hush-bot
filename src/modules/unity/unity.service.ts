@@ -40,10 +40,10 @@ export class UnityService {
       const nowTime = moment().format('HH:mm:ss');
       console.log(`${CronType.HUSH}${cronId}-${nowTime}: 유니티 크론 시작`);
 
+      await this.soldoutService.soldOutCron(cronId);
+      await this.conformService.conformCron(cronId);
+      await this.orderService.orderCron(cronId);
       await this.shippingService.shippingCron(cronId);
-      // await this.soldoutService.soldOutCron(cronId);
-      // await this.conformService.conformCron(cronId);
-      // await this.orderService.orderCron(cronId);
     } catch (error) {
       console.error(`${CronType.ERROR}${CronType.HUSH}${cronId}:`, error);
     } finally {

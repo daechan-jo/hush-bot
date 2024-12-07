@@ -14,7 +14,12 @@ export class UtilService {
     return moment.tz('Asia/Seoul').subtract(1, 'days').toDate();
   }
 
-  convertKoreaTime(dateString: string) {
+  convertKoreaTime(dateString: string): Date {
     return moment.utc(dateString).tz('Asia/Seoul').toDate();
+  }
+
+  removeFirstWord(str: string) {
+    const words = str.trim().split(' ');
+    return words.slice(1).join(' ');
   }
 }
