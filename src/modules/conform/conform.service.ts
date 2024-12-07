@@ -1,15 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron } from '@nestjs/schedule';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import Redis from 'ioredis';
+import moment from 'moment';
 
-import { CronType } from '../../types/enum.types';
+import { CronType } from '../../types/enum.type';
 import { CoupangService } from '../coupang/coupang.service';
 import { MailService } from '../mail/mail.service';
 import { OnchService } from '../onch/onch.service';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
-import { UtilService } from '../util/util.service';
 
 @Injectable()
 export class ConformService {
@@ -17,10 +14,8 @@ export class ConformService {
     private readonly puppeteerService: PuppeteerService,
     private readonly coupangService: CoupangService,
     private readonly onchService: OnchService,
-    private readonly utilService: UtilService,
     private readonly configService: ConfigService,
     private readonly mailService: MailService,
-    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   async deleteConfirmedProducts(cronId: string) {
@@ -74,46 +69,27 @@ export class ConformService {
     await this.puppeteerService.closeAllPages();
   }
 
-  @Cron('0 */20 * * * *')
-  async conformCron(retryCount = 0, cronId?: string) {
-    const lockKey = `lock:${this.configService.get<string>('STORE')}`;
-    const lockValue = Date.now().toString();
-    const currentCronId = cronId || this.utilService.generateCronId();
-    const MAX_RETRIES = 3;
-
-    const isLocked = await this.redis.set(lockKey, lockValue, 'NX');
-
-    if (!isLocked) {
-      console.log(`${CronType.CONFORM}${currentCronId}: 락 획득 실패-${retryCount + 1}번째 재시도`);
-
-      if (retryCount < MAX_RETRIES - 1) {
-        setTimeout(() => this.conformCron(retryCount + 1, currentCronId), 60000);
-      } else {
-        console.log(`${CronType.CONFORM}${currentCronId}: 최대 재시도 횟수 도달 작업 종료`);
-      }
-      return;
-    }
-
+  async conformCron(cronId: string, retryCount = 1) {
     try {
-      console.log(`${CronType.CONFORM}${currentCronId}: 시작...`);
+      const nowTime = moment().format('HH:mm:ss');
+      console.log(`${CronType.CONFORM}${cronId}-${nowTime}: 시작`);
 
-      await this.deleteConfirmedProducts(currentCronId);
+      await this.deleteConfirmedProducts(cronId);
     } catch (error) {
-      console.error(`${CronType.ERROR}${CronType.CONFORM}${currentCronId}: 오류 발생\n`, error);
+      console.error(`${CronType.ERROR}${CronType.CONFORM}${cronId}: 오류 발생\n`, error);
       if (retryCount < 10) {
-        console.log(`${CronType.CONFORM}${currentCronId}: ${retryCount + 1}번째 재시도 예정`);
-        setTimeout(() => this.conformCron(retryCount + 1, cronId), 3000);
+        console.log(`${CronType.CONFORM}${cronId}: ${retryCount + 1}번째 재시도 예정`);
+        setTimeout(() => this.conformCron(cronId, retryCount + 1), 3000);
       } else {
-        console.error(`${CronType.ERROR}${CronType.CONFORM}${currentCronId}: 재시도 횟수 초과`);
+        console.error(`${CronType.ERROR}${CronType.CONFORM}${cronId}: 재시도 횟수 초과`);
         await this.mailService.sendErrorMail(
-          CronType.ORDER,
+          CronType.CONFORM,
           this.configService.get<string>('STORE'),
-          currentCronId,
+          cronId,
         );
       }
     } finally {
-      await this.redis.del(`lock:${this.configService.get<string>('STORE')}`);
-      console.log(`${CronType.CONFORM}${currentCronId}: 종료`);
+      console.log(`${CronType.CONFORM}${cronId}: 종료`);
     }
   }
 }

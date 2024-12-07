@@ -67,12 +67,10 @@ export class PuppeteerService {
     });
 
     if (!isLoginPage) {
-      console.log('이미 쿠팡에 로그인되어 있습니다.');
       return page; // 로그인 페이지가 아니면 이미 로그인 상태
     }
 
     // 로그인 필요
-    console.log('쿠팡 로그인 시도 중...');
     await page.type('#username', this.configService.get<string>('COUPANG_EMAIL'));
     await page.type('#password', this.configService.get<string>('COUPANG_PASSWORD'));
 

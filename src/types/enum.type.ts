@@ -3,6 +3,8 @@ export enum CronType {
   CONFORM = `[✅컨펌]`,
   PRICE = `[🤖위너]`,
   ERROR = `❗️`,
-  SHIPPING = `[🚚반품]`,
+  REFEE = `[🛒반품]`,
   ORDER = `[💰발주]`,
+  HUSH = `[🍫허쉬]`,
+  SHIPPING = `[🚚배송]`,
 }

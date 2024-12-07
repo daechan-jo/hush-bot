@@ -22,10 +22,12 @@ import { PriceModule } from './modules/price/price.module';
 import { PriceService } from './modules/price/price.service';
 import { PuppeteerModule } from './modules/puppeteer/puppeteer.module';
 import { PuppeteerService } from './modules/puppeteer/puppeteer.service';
-import { ShippingModule } from './modules/shipping/shipping.module';
-import { ShippingService } from './modules/shipping/shipping.service';
+import { RefeeModule } from './modules/refee/refee.module';
+import { RefeeService } from './modules/refee/refee.service';
 import { SoldoutModule } from './modules/soldout/soldout.module';
 import { SoldoutService } from './modules/soldout/soldout.service';
+import { UnityModule } from './modules/unity/unity.module';
+import { UnityService } from './modules/unity/unity.service';
 import { UtilModule } from './modules/util/util.module';
 
 @Module({
@@ -46,8 +48,9 @@ import { UtilModule } from './modules/util/util.module';
     ConformModule,
     OnchModule,
     UtilModule,
-    ShippingModule,
+    RefeeModule,
     OrderModule,
+    UnityModule,
   ],
   providers: [],
 })
@@ -60,9 +63,10 @@ export class AppModule implements OnApplicationBootstrap {
     private readonly onchRepository: OnchRepository,
     private readonly coupangRepository: CoupangRepository,
     private readonly coupangService: CoupangService,
-    private readonly shippingService: ShippingService,
+    private readonly refeeService: RefeeService,
     private readonly configService: ConfigService,
     private readonly orderService: OrderService,
+    private readonly unityService: UnityService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -73,11 +77,12 @@ export class AppModule implements OnApplicationBootstrap {
 
     setTimeout(async () => {
       await this.puppeteerService.init();
+      await this.unityService.unityCron();
       // await this.orderService.OrderCron();
       // await this.soldoutService.soldOutCron();
-      // await this.conformService.conformCron();
-      // await this.shippingService.shippingCostCron();
+      // await this.conformService.conformCron('1');
       // await this.priceService.autoPriceCron();
+      // await this.refeeService.shippingCostCron();
     }, 100);
   }
 }

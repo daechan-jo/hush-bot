@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
-import { CronType } from '../../types/enum.types';
+import { CronType } from '../../types/enum.type';
 
 @Injectable()
 export class MailService {
@@ -150,14 +150,14 @@ export class MailService {
     const itemsHtml = result
       .map(
         (order) =>
-          `<li>주문번호: ${order.orderId}, 주문인: ${order.ordererName}, 수취인: ${order.receiverName}, 상품: ${order.sellerProductName}, 옵션: ${order.sellerProductItemName}, 수량: ${order.shippingCount}</li>`,
+          `<li>주문번호: ${order.orderId}, 주문인: ${order.ordererName}, 수취인: ${order.receiverName}, 상품: ${order.sellerProductName}, 옵션: ${order.sellerProductItemName}, 수량: ${order.shippingCount}, 에러: ${order.error}</li>`,
       )
       .join('');
 
     const mailOptions = {
       from: `"Hush-BOT"`,
       to: this.adminEmails,
-      subject: `${CronType.ORDER}-${store} 자동 발주 실패 안내`,
+      subject: `${CronType.ERROR}${CronType.ORDER}-${store} 자동 발주 실패 안내`,
       html: `
         <h3>발주 실패 알림</h3>
         <ul>
@@ -173,7 +173,7 @@ export class MailService {
     const mailOptions = {
       from: `"Hush-BOT"`,
       to: this.adminEmails,
-      subject: `${CronType.ERROR}${cronType}-${store} 에러 안내`,
+      subject: `${CronType.ERROR}${cronType}${currentCronId}-${store} 에러 안내`,
       html: `
         <h3>크론작업 실패 - 확인요망</h3>
       `,
@@ -185,5 +185,51 @@ export class MailService {
     } catch (error) {
       console.error(`에러 알림 이메일 발송 실패:`, error.message);
     }
+  }
+
+  async sendSuccessInvoiceUpload(successInvoiceUploads: any[], store: string) {
+    const itemsHtml = successInvoiceUploads
+      .map(
+        (order) =>
+          `<li>주문번호: ${order.orderId}, 택배사: ${order.deliveryCompanyCode}, 운송장: ${order.invoiceNumber}</li>`,
+      )
+      .join('');
+
+    const mailOptions = {
+      from: `"Hush-BOT"`,
+      to: this.adminEmails,
+      subject: `${CronType.SHIPPING}-${store} 운송장 업로드 안내`,
+      html: `
+        <h3>운송장 업로드 알림</h3>
+        <ul>
+          ${itemsHtml}
+        </ul>
+      `,
+    };
+
+    await this.transporter.sendMail(mailOptions);
+  }
+
+  async sendFailedInvoiceUpload(successInvoiceUploads: any[], store: string) {
+    const itemsHtml = successInvoiceUploads
+      .map(
+        (order) =>
+          `<li>주문번호: ${order.orderId}, 택배사: ${order.deliveryCompanyCode}, 운송장: ${order.invoiceNumber}, 에러: ${order.error}</li>`,
+      )
+      .join('');
+
+    const mailOptions = {
+      from: `"Hush-BOT"`,
+      to: this.adminEmails,
+      subject: `${CronType.ERROR}${CronType.SHIPPING}-${store} 운송장 업로드 실패 안내`,
+      html: `
+        <h3>운송장 업로드 실패 알림</h3>
+        <ul>
+          ${itemsHtml}
+        </ul>
+      `,
+    };
+
+    await this.transporter.sendMail(mailOptions);
   }
 }

@@ -3,10 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import moment from 'moment/moment';
 import { Page } from 'puppeteer';
 
 import { PriceRepository } from './price.repository';
-import { CronType } from '../../types/enum.types';
+import { CronType } from '../../types/enum.type';
 import { CoupangRepository } from '../coupang/coupang.repository';
 import { CoupangService } from '../coupang/coupang.service';
 import { MailService } from '../mail/mail.service';
@@ -307,13 +308,14 @@ export class PriceService {
     const isLocked = await this.redis.set(lockKey, lockValue, 'NX');
 
     if (!isLocked) {
-      console.log(`${CronType.PRICE}${currentCronId}: 락 획득 실패-1분 후 재시도`);
+      console.log(`${CronType.PRICE}${currentCronId}: 락 획득 실패 - 1분 후 재시도`);
       setTimeout(() => this.autoPriceCron(currentCronId), 60000);
       return;
     }
 
     try {
-      console.log(`${CronType.PRICE}${currentCronId}: 시작`);
+      const nowTime = moment().format('HH:mm:ss');
+      console.log(`${CronType.PRICE}${currentCronId}-${nowTime}: 시작`);
 
       await this.crawlOnchRegisteredProducts(currentCronId);
     } catch (error) {

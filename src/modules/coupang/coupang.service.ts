@@ -8,7 +8,7 @@ import axios from 'axios';
 import { Page } from 'puppeteer';
 import * as XLSX from 'xlsx';
 
-import { CronType } from '../../types/enum.types';
+import { CronType } from '../../types/enum.type';
 import { MailService } from '../mail/mail.service';
 import { PriceRepository } from '../price/price.repository';
 
@@ -144,6 +144,7 @@ export class CoupangService {
   async getCoupangOrderList(
     cronId: string,
     type: string,
+    status: string,
     vendorId: string,
     today: string,
     yesterday: string,
@@ -158,7 +159,7 @@ export class CoupangService {
           vendorId,
           createdAtFrom: yesterday,
           createdAtTo: today,
-          status: 'ACCEPT',
+          status: status,
           nextToken: nextToken,
           maxPerPage: 50,
         });
@@ -174,7 +175,7 @@ export class CoupangService {
             vendorId: this.vendorId,
             createdAtFrom: yesterday,
             createdAtTo: today,
-            status: 'ACCEPT',
+            status: status,
             nextToken: nextToken,
             maxPerPage: 50,
           },
@@ -400,27 +401,31 @@ export class CoupangService {
   }
 
   async shippingCostManagement(cronId: string) {
-    console.log(`${CronType.SHIPPING}${cronId}: 반품 배송비 관리 시작...`);
+    console.log(`${CronType.REFEE}${cronId}: 반품 배송비 관리 시작...`);
 
-    const coupangProducts = await this.fetchCoupangSellerProducts(cronId, CronType.SHIPPING);
-    // todo 여기에는 반품배송정보가 없음. 별도로 다시 조회요청해야함.
+    const coupangProductDetails = [];
+    const coupangProducts = await this.fetchCoupangSellerProducts(cronId, CronType.REFEE);
+
+    for (const product of coupangProducts) {
+      const productDetail = await this.fetchCoupangProductDetails(
+        cronId,
+        CronType.REFEE,
+        product.sellerProductId,
+      );
+      if (productDetail.data.returnCharge !== '7000' || 7000)
+        coupangProductDetails.push(productDetail.data);
+    }
 
     let successCount = 0;
     let failedCount = 0;
 
-    const productsToUpdate = coupangProducts.filter(
-      (product) => product.returnCharge !== '7000' || 7000,
-    );
-
-    if (productsToUpdate.length === 0) {
-      console.log(
-        `${CronType.SHIPPING}${cronId}: 모든 상품의 반품 배송비가 올바르게 설정되어 있음`,
-      );
+    if (coupangProductDetails.length === 0) {
+      console.log(`${CronType.REFEE}${cronId}: 모든 상품의 반품 배송비가 올바르게 설정되어 있음`);
     }
 
-    console.log(`${CronType.SHIPPING}${cronId}: ${productsToUpdate.length}개 수정 시작...`);
+    console.log(`${CronType.REFEE}${cronId}: ${coupangProductDetails.length}개 수정 시작...`);
 
-    for (const product of productsToUpdate) {
+    for (const product of coupangProductDetails) {
       const updatePath = `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/${product.sellerProductId}/partial`;
       const body = { sellerProductId: product.sellerProductId, returnCharge: 7000 };
 
@@ -443,7 +448,7 @@ export class CoupangService {
         successCount++;
       } catch (updateError) {
         console.error(
-          `${CronType.ERROR}${CronType.SHIPPING}${cronId}: 반품 배송비 업데이트 실패 SellerProductId-${product.sellerProductId}\n`,
+          `${CronType.ERROR}${CronType.REFEE}${cronId}: 반품 배송비 업데이트 실패 SellerProductId-${product.sellerProductId}\n`,
           updateError.response?.data || updateError.message,
         );
         failedCount++;
@@ -452,11 +457,11 @@ export class CoupangService {
     }
 
     console.log(
-      `${CronType.SHIPPING}${cronId}: 반품 배송비 관리 완료\n성공 ${successCount}개, 실패 ${failedCount}개`,
+      `${CronType.REFEE}${cronId}: 반품 배송비 관리 완료\n성공 ${successCount}개, 실패 ${failedCount}개`,
     );
   }
 
-  async orderStatusUpdate(coupangPage: Page) {
+  async orderStatusUpdate(coupangPage: Page, cronId: string) {
     await coupangPage.goto('https://wing.coupang.com/tenants/sfl-portal/delivery/management', {
       timeout: 0,
     });
@@ -469,7 +474,7 @@ export class CoupangService {
     const checkboxes = await coupangPage.$$(checkboxSelector);
 
     if (checkboxes.length === 0) {
-      console.error('체크박스를 찾을 수 없습니다.');
+      console.log(`${CronType.ORDER}${cronId}: 결제 완료 상품이 없습니다.`);
       return;
     }
 
@@ -512,5 +517,75 @@ export class CoupangService {
     }, downloadButtonSelector);
 
     return coupangPage;
+  }
+
+  async invoiceUpload(cronId: string, matchedOrders: any[]) {
+    console.log(`${CronType.SHIPPING}${cronId}: 송장업로드 시작`);
+    const results = [];
+
+    const vendorId = this.configService.get<string>('COUPANG_VENDOR_ID');
+
+    const updatePath = `/v2/providers/openapi/apis/api/v4/vendors/${vendorId}/orders/invoices`;
+
+    for (const order of matchedOrders) {
+      const body = {
+        vendorId: vendorId,
+        orderSheetInvoiceApplyDtos: [
+          {
+            shipmentBoxId: order.shipmentBoxId,
+            orderId: order.orderId,
+            vendorItemId: order.orderItems[0].vendorItemId,
+            deliveryCompanyCode: order.deliveryCompanyCode,
+            invoiceNumber: order.courier.trackingNumber,
+            splitShipping: false,
+            preSplitShipped: false,
+            estimatedShippingDate: '',
+          },
+        ],
+      };
+
+      try {
+        const { authorization, datetime } = await this.createHmacSignature(
+          'POST',
+          updatePath,
+          '',
+          false,
+        );
+
+        await axios.post(`https://api-gateway.coupang.com${updatePath}`, body, {
+          headers: {
+            Authorization: authorization,
+            'Content-Type': 'application/json;charset=UTF-8',
+            'X-Coupang-Date': datetime,
+          },
+        });
+
+        results.push({
+          status: 'success',
+          orderId: order.orderId,
+          vendorItemId: order.orderItems[0].vendorItemId,
+          receiverName: order.courier.name,
+          deliveryCompanyCode: order.deliveryCompanyCode,
+          invoiceNumber: order.courier.trackingNumber,
+        });
+      } catch (error) {
+        results.push({
+          status: 'failed',
+          orderId: order.orderId,
+          vendorItemId: order.orderItems[0].vendorItemId,
+          receiverName: order.courier.name,
+          deliveryCompanyCode: order.courier.deliveryCompanyCode,
+          invoiceNumber: order.courier.trackingNumber,
+          error: error,
+        });
+
+        console.error(
+          `${CronType.ERROR}${CronType.REFEE}${cronId}: 송장 업로드 실패 SellerProductId-${order.sellerProductId}\n`,
+          error.response?.data || error.message,
+        );
+      }
+    }
+
+    return results;
   }
 }
