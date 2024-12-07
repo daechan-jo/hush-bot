@@ -42,7 +42,7 @@ export class OrderService {
       for (const item of order.orderItems) {
         const sellerProductName = item.sellerProductName;
         const exposedProductName = `${item.sellerProductName}, ${item.sellerProductItemName}`;
-        const processedProductName = item.vendorItemName.includes(exposedProductName);
+        const processedProductName = this.utilService.removeFirstWord(exposedProductName);
 
         const searchQuery = sellerProductName.split(' ')[0];
         const vendorItemOption = item.vendorItemName.split(', ')[1];
@@ -54,7 +54,8 @@ export class OrderService {
             processedProductName,
           );
           console.log(`${CronType.ORDER}${cronId}: 노출상품명`, item.vendorItemName);
-          if (exposedProductName !== item.vendorItemName)
+
+          if (exposedProductName !== item.vendorItemName.trim())
             if (!item.vendorItemName.includes(processedProductName))
               if (
                 !item.vendorItemName.includes(

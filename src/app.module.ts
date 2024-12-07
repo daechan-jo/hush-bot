@@ -72,8 +72,8 @@ export class AppModule implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     await this.redis.del(`lock:${this.configService.get<string>('STORE')}`);
-    await this.onchRepository.clearOnchProducts();
-    await this.coupangRepository.clearCoupangProducts();
+    // await this.onchRepository.clearOnchProducts();
+    // await this.coupangRepository.clearCoupangProducts();
 
     setTimeout(async () => {
       await this.puppeteerService.init();
