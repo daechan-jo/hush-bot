@@ -17,8 +17,11 @@ export class UpdatedItem {
   @Column({ name: 'vendor_item_id', type: 'varchar', length: 255, nullable: true })
   vendorItemId: string;
 
-  @Column({ name: 'product_code', type: 'varchar', length: 255, nullable: true })
-  productCode: string;
+  @Column({ name: 'seller_product_id', type: 'varchar', length: 255, nullable: true })
+  sellerProductId: string;
+
+  @Column({ name: 'item_name', type: 'varchar', length: 255, nullable: true })
+  itemName: string;
 
   @Column({ type: 'varchar', nullable: true })
   action: string;

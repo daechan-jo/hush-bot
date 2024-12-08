@@ -1,16 +1,19 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as readline from 'node:readline';
 import * as path from 'path';
 
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import * as cliProgress from 'cli-progress';
 import { Page } from 'puppeteer';
 import * as XLSX from 'xlsx';
 
 import { CronType } from '../../types/enum.type';
 import { MailService } from '../mail/mail.service';
 import { PriceRepository } from '../price/price.repository';
+import { UtilService } from '../util/util.service';
 
 @Injectable()
 export class CoupangService {
@@ -22,6 +25,7 @@ export class CoupangService {
     private readonly configService: ConfigService,
     private readonly mailService: MailService,
     private readonly priceRepository: PriceRepository,
+    private readonly utilServie: UtilService,
   ) {
     this.secretKey = this.configService.get<string>('COUPANG_SECRET_KEY');
     this.accessKey = this.configService.get<string>('COUPANG_ACCESS_KEY');
@@ -308,66 +312,56 @@ export class CoupangService {
     let failedCount = 0;
     const updatedItems = await this.priceRepository.getUpdatedItems(cronVersionId);
 
-    for (const product of updatedItems) {
+    console.log(`${CronType.PRICE}${cronId}: 총 ${updatedItems.length}개의 아이템 업데이트`);
+    const progressBar = this.utilServie.initProgressBar();
+    progressBar.start(updatedItems.length, 0);
+
+    for (const [index, item] of updatedItems.entries()) {
+      const vendorItemId = item.vendorItemId;
+
+      const priceUpdatePath = `/v2/providers/seller_api/apis/api/v1/marketplace/vendor-items/${vendorItemId}/prices/${item.newPrice}`;
+
+      const { authorization, datetime } = await this.createHmacSignature(
+        'PUT',
+        priceUpdatePath,
+        '',
+        false,
+      );
+
       try {
-        // sellerProductId로 쿠팡 상품 상세 정보 가져오기
-        const productDetail = await this.fetchCoupangProductDetails(
-          cronId,
-          CronType.PRICE,
-          +product.vendorItemId,
-        );
+        await axios.put(`https://api-gateway.coupang.com${priceUpdatePath}`, null, {
+          headers: {
+            Authorization: authorization,
+            'Content-Type': 'application/json;charset=UTF-8',
+            'X-Coupang-Date': datetime,
+          },
+        });
 
-        // items 배열에서 각 vendorItemId를 추출하여 가격 업데이트
-        if (productDetail && productDetail.data && productDetail.data.items) {
-          const items = productDetail.data.items;
-
-          for (const item of items) {
-            const vendorItemId = item.vendorItemId;
-
-            const priceUpdatePath = `/v2/providers/seller_api/apis/api/v1/marketplace/vendor-items/${vendorItemId}/prices/${product.newPrice}`;
-
-            const { authorization, datetime } = await this.createHmacSignature(
-              'PUT',
-              priceUpdatePath,
-              '',
-              false,
-            );
-
-            try {
-              await axios.put(`https://api-gateway.coupang.com${priceUpdatePath}`, null, {
-                headers: {
-                  Authorization: authorization,
-                  'Content-Type': 'application/json;charset=UTF-8',
-                  'X-Coupang-Date': datetime,
-                },
-              });
-              successCount++;
-            } catch (updateError) {
-              console.error(
-                `${CronType.ERROR}${CronType.PRICE}${cronId}: 가격 업데이트 오류 vendorItemId-${vendorItemId}\n`,
-                updateError.response?.data || updateError.message,
-              );
-              failedCount++;
-            }
-          }
-        }
-      } catch (error) {
-        console.error(
-          `${CronType.ERROR}${CronType.PRICE}${cronId}:상품 상세 조회 오류 sellerProductId-${product.productCode}\n`,
-          error.message,
-        );
+        successCount++;
+      } catch (updateError) {
         failedCount++;
+
+        this.utilServie.resetCursorAboveProgressBar(3);
+        console.error(
+          `${CronType.ERROR}${CronType.PRICE}${cronId}: 가격 업데이트 오류 vendorItemId-${vendorItemId}\n`,
+          updateError.response?.data || updateError.message,
+        );
+        this.utilServie.moveCursorToProgressBar(3);
       }
+      progressBar.update(index + 1);
     }
 
-    const excelData = updatedItems.map((product) => ({
-      'Seller Product ID': product.sellerProductId,
-      'Product Code': product.productCode,
-      Action: product.action,
-      'New Price': product.newPrice,
-      'Current Price': product.currentPrice,
-      'Current Is Winner': product.currentIsWinner,
-      'Created At': product.createdAt,
+    progressBar.stop();
+
+    const excelData = updatedItems.map((item) => ({
+      'Seller Product ID': item.sellerProductId,
+      'Vendor Item ID': item.vendorItemId,
+      'Item Name': item.itemName,
+      Action: item.action,
+      'New Price': item.newPrice,
+      'Current Price': item.currentPrice,
+      'Current Is Winner': item.currentIsWinner,
+      'Created At': item.createdAt,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
@@ -412,7 +406,7 @@ export class CoupangService {
         CronType.REFEE,
         product.sellerProductId,
       );
-      if (productDetail.data.returnCharge !== '7000' || 7000)
+      if (productDetail.data.returnCharge !== '5000' || 5000)
         coupangProductDetails.push(productDetail.data);
     }
 

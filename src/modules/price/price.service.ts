@@ -33,12 +33,13 @@ export class PriceService {
     const onchPage = await this.puppeteerService.loginToOnchSite();
 
     console.log(`${CronType.PRICE}${cronId}: 온채널 판매상품 리스트업 시작...`);
-
-    let currentPage = 1;
     const allProductIds = [];
+    let currentPage = 1;
 
     while (true) {
-      await onchPage.goto(`https://www.onch3.co.kr/admin_mem_prd_list.html?page=${currentPage}`);
+      await onchPage.goto(
+        `https://www.onch3.co.kr/admin_mem_prd_list.html?npage=100&page=${currentPage}`,
+      );
 
       // 현재 페이지에서 상품 고유번호 추출
       const productIds = await onchPage.evaluate(() => {
@@ -241,91 +242,44 @@ export class PriceService {
     console.log(`${CronType.PRICE}${cronId}: 새로운 판매가 연산 시작...`);
 
     const productsBatch = [];
+    const seenVendorItemIds = new Set();
 
     const cronVersionId = await this.priceRepository.createCronVersion(cronId);
     const products: any[] = await this.priceRepository.getProducts();
 
-    // 각 상품에 대한 가격 조정 계산 = 아이템에 대한 가격 조정을 해야함
-    // 문제는 쿠팡 크롤링으로 조회한 상품에 각 아이템에 대한 정보가 없음.
+    // 매치된 상품들에서 각 상품들을 순회
     for (const product of products) {
+      // 매치된 상품에 대한 상세정보를 쿠팡에서 가져옴
       const coupangDetail = await this.coupangService.fetchCoupangProductDetails(
         cronId,
         CronType.PRICE,
         product.sellerProductId,
       );
 
-      const coupangItems = coupangDetail.data.items;
+      const coupangItemMap = new Map(
+        coupangDetail.data.items.map((item: any) => [item.itemName.trim(), item]),
+      );
 
+      // 상품에 포함된 아이템을 가져와서
       for (const onchItem of product.onchItems) {
-        const matchedCoupangItem = coupangItems.find(
-          (coupangItem: any) => coupangItem.itemName.trim() === onchItem.itemName.trim(),
+        // 쿠팡 아이템과 매치시킴
+        const matchedCoupangItem = coupangItemMap.get(onchItem.itemName.trim());
+
+        if (!matchedCoupangItem) continue;
+
+        const processedData = this.processProductData(product, onchItem, matchedCoupangItem);
+
+        const { salePrice, wholesalePrice, margin, netProfit } = this.calculatePrices(
+          processedData,
+          product,
         );
 
-        if (matchedCoupangItem) {
-          const processedData = {
-            vendorItemId: matchedCoupangItem.vendorItemId,
-            optionName: onchItem.optionName,
-            coupangSalePrice: +matchedCoupangItem.salePrice,
-            onchSellerPrice: +onchItem.sellerPrice,
-            onchConsumerPrice: +onchItem.consumerPrice,
-            coupangShippingCost: +product.coupangShippingCost,
-            onchSippingCost: product.onchSippingCost,
-            coupangIsWinner: product.coupangIsWinner,
-          };
+        const adjustment = this.adjustPrice(salePrice, netProfit, margin, processedData);
 
-          const salePrice = Math.round(
-            +product.coupangSalePrice -
-              +product.coupangSalePrice / 10.8 +
-              +processedData.coupangShippingCost,
-          ); // 판매수익
-          const wholesalePrice = +processedData.onchSellerPrice + +processedData.onchSippingCost; // 도매비용
-          const netProfit = salePrice - wholesalePrice; // 순수익
-          const margin = Math.round(wholesalePrice * 0.07); // 목표마진(최소)
-
-          processedData.coupangIsWinner = false;
-
-          if (netProfit > margin && !processedData.coupangIsWinner) {
-            const requiredDecreaseInRevenue = netProfit - margin;
-            const adjustedTotalRevenue = salePrice - requiredDecreaseInRevenue;
-
-            const newPrice = Math.round(
-              ((adjustedTotalRevenue - +product.coupangShippingCost) * 10.8) / 9.8,
-            );
-
-            const roundedPrice = Math.round(newPrice / 10) * 10;
-
-            if (newPrice < +processedData.coupangSalePrice) {
-              productsBatch.push({
-                vendorItemId: processedData.vendorItemId,
-                productCode: product.coupangProductCode,
-                action: 'down',
-                newPrice: roundedPrice,
-                currentPrice: product.coupangPrice,
-                currentIsWinner: product.coupangIsWinner,
-              });
-            }
-            console.log(productsBatch);
-          } else if (netProfit < margin) {
-            const requiredIncreaseInRevenue = margin - netProfit; // 필요한 추가 수익
-            const adjustedTotalRevenue = salePrice + requiredIncreaseInRevenue; // 수정된 총수익
-
-            const newPrice = Math.round(
-              ((adjustedTotalRevenue - +product.coupangShippingCost) * 10.8) / 9.8,
-            );
-
-            const roundedPrice = Math.round(newPrice / 10) * 10;
-
-            if (newPrice > +processedData.coupangSalePrice) {
-              productsBatch.push({
-                vendorItemId: processedData.vendorItemId,
-                productCode: product.coupangProductCode,
-                action: 'down',
-                newPrice: roundedPrice,
-                currentPrice: product.coupangPrice,
-                currentIsWinner: product.coupangIsWinner,
-              });
-            }
-          }
+        if (adjustment && !seenVendorItemIds.has(adjustment.vendorItemId)) {
+          seenVendorItemIds.add(adjustment.vendorItemId);
+          console.log(adjustment);
+          productsBatch.push(adjustment);
 
           if (productsBatch.length >= 50) {
             await this.priceRepository.saveUpdateItems(productsBatch, cronVersionId);
@@ -333,85 +287,11 @@ export class PriceService {
           }
         }
       }
-      if (productsBatch.length > 0) {
-        await this.priceRepository.saveUpdateItems(productsBatch, cronVersionId);
-      }
-
-      console.log(`${CronType.PRICE}${cronId}: 연산 종료`);
-    }
-  }
-
-  // 원래는, 온채널과 쿠팡 상품을 교집합해서 일치하는 상품들만 추려내고, 상품가격을 한번에 업데이트함.
-  async calculateMarginAndAdjustPrices(cronId: string) {
-    console.log(`${CronType.PRICE}${cronId}: 새로운 판매가 연산 시작...`);
-
-    const cronVersionId = await this.priceRepository.createCronVersion(cronId);
-
-    const products: any[] = await this.priceRepository.getProducts();
-
-    const productsBatch = [];
-
-    // 각 상품에 대한 가격 조정 계산 = 아이템에 대한 가격 조정을 해야함
-    for (const product of products) {
-      const salePrice = Math.round(
-        +product.coupangPrice - +product.coupangPrice / 10.8 + +product.coupangShippingCost,
-      ); // 판매수익
-      const wholesalePrice = +product.onchSellerPrice + +product.onchShippingCost; // 도매비용
-      const netProfit = salePrice - wholesalePrice; // 순수익
-      const margin = Math.round(wholesalePrice * 0.07); // 목표마진(최소)
-
-      if (netProfit > margin && !product.coupangIsWinner) {
-        const requiredDecreaseInRevenue = netProfit - margin;
-        const adjustedTotalRevenue = salePrice - requiredDecreaseInRevenue;
-
-        const newPrice = Math.round(
-          ((adjustedTotalRevenue - +product.coupangShippingCost) * 10.8) / 9.8,
-        );
-
-        const roundedPrice = Math.round(newPrice / 10) * 10;
-
-        if (newPrice < +product.coupangPrice) {
-          productsBatch.push({
-            sellerProductId: product.sellerProductId,
-            productCode: product.coupangProductCode,
-            action: 'down',
-            newPrice: roundedPrice,
-            currentPrice: product.coupangPrice,
-            currentIsWinner: product.coupangIsWinner,
-          });
-        }
-      } else if (netProfit < margin) {
-        const requiredIncreaseInRevenue = margin - netProfit; // 필요한 추가 수익
-        const adjustedTotalRevenue = salePrice + requiredIncreaseInRevenue; // 수정된 총수익
-
-        const newPrice = Math.round(
-          ((adjustedTotalRevenue - +product.coupangShippingCost) * 10.8) / 9.8,
-        );
-
-        const roundedPrice = Math.round(newPrice / 10) * 10;
-
-        if (newPrice > +product.coupangPrice) {
-          productsBatch.push({
-            sellerProductId: product.sellerProductId,
-            productCode: product.coupangProductCode,
-            action: 'up',
-            newPrice: roundedPrice,
-            currentPrice: product.coupangPrice,
-            currentIsWinner: product.coupangIsWinner,
-          });
-        }
-      }
-
-      if (productsBatch.length >= 50) {
-        await this.priceRepository.saveUpdateItems(productsBatch, cronVersionId);
-        productsBatch.length = 0;
-      }
     }
 
     if (productsBatch.length > 0) {
       await this.priceRepository.saveUpdateItems(productsBatch, cronVersionId);
     }
-
     console.log(`${CronType.PRICE}${cronId}: 연산 종료`);
 
     await this.coupangService.couPangProductsPriceControl(cronId, cronVersionId);
@@ -419,7 +299,6 @@ export class PriceService {
     try {
       await this.onchRepository.clearOnchProducts();
       await this.coupangRepository.clearCoupangProducts();
-
       console.log(`${CronType.PRICE}${cronId}: 온채널/쿠팡 크롤링 데이터 삭제`);
     } catch (err) {
       console.error(
@@ -427,6 +306,81 @@ export class PriceService {
         err,
       );
     }
+  }
+
+  processProductData(product: any, onchItem: any, matchedCoupangItem: any) {
+    return {
+      sellerProductId: product.sellerProductId,
+      vendorItemId: matchedCoupangItem.vendorItemId,
+      itemName: onchItem.itemName,
+      coupangSalePrice: +matchedCoupangItem.salePrice,
+      onchSellerPrice: +onchItem.sellerPrice,
+      onchConsumerPrice: +onchItem.consumerPrice,
+      coupangShippingCost: +product.coupangShippingCost,
+      onchShippingCost: +product.onchShippingCost,
+      coupangIsWinner: product.coupangIsWinner,
+    };
+  }
+
+  calculatePrices(processedData: any, product: any) {
+    const salePrice = Math.round(
+      processedData.coupangSalePrice -
+        processedData.coupangSalePrice / 10.8 +
+        processedData.coupangShippingCost,
+    );
+    const wholesalePrice = processedData.onchSellerPrice + processedData.onchShippingCost;
+    const netProfit = salePrice - wholesalePrice;
+    const margin = Math.round(wholesalePrice * 0.07); // 최소 마진 7%
+
+    return { salePrice, wholesalePrice, netProfit, margin };
+  }
+
+  adjustPrice(salePrice: number, netProfit: number, margin: number, processedData: any) {
+    if (netProfit > margin && !processedData.coupangIsWinner) {
+      const requiredDecreaseInRevenue = netProfit - margin;
+      const adjustedTotalRevenue = salePrice - requiredDecreaseInRevenue;
+
+      const newPrice = Math.round(
+        ((adjustedTotalRevenue - processedData.coupangShippingCost) * 10.8) / 9.8,
+      );
+
+      const roundedPrice = Math.round(newPrice / 10) * 10;
+
+      if (roundedPrice < processedData.coupangSalePrice) {
+        return {
+          sellerProductId: processedData.sellerProductId,
+          vendorItemId: processedData.vendorItemId,
+          itemName: processedData.itemName,
+          action: 'down',
+          newPrice: roundedPrice,
+          currentPrice: processedData.coupangSalePrice,
+          currentIsWinner: processedData.coupangIsWinner,
+        };
+      }
+    } else if (netProfit < margin) {
+      const requiredIncreaseInRevenue = margin - netProfit;
+      const adjustedTotalRevenue = salePrice + requiredIncreaseInRevenue;
+
+      const newPrice = Math.round(
+        ((adjustedTotalRevenue - processedData.coupangShippingCost) * 10.8) / 9.8,
+      );
+
+      const roundedPrice = Math.round(newPrice / 10) * 10;
+
+      if (roundedPrice > processedData.coupangSalePrice) {
+        return {
+          vendorItemId: processedData.vendorItemId,
+          sellerProductId: processedData.sellerProductId,
+          itemName: processedData.itemName,
+          action: 'up',
+          newPrice: roundedPrice,
+          currentPrice: processedData.coupangSalePrice,
+          currentIsWinner: processedData.coupangIsWinner,
+        };
+      }
+    }
+
+    return null; // 조정 필요 없음
   }
 
   @Cron('0 0 3 * * *')

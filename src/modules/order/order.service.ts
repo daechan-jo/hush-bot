@@ -42,29 +42,19 @@ export class OrderService {
       for (const item of order.orderItems) {
         const sellerProductName = item.sellerProductName;
         const exposedProductName = `${item.sellerProductName}, ${item.sellerProductItemName}`;
-        const processedProductName = this.utilService.removeFirstWord(exposedProductName);
 
         const searchQuery = sellerProductName.split(' ')[0];
         const vendorItemOption = item.vendorItemName.split(', ')[1];
 
         try {
-          console.log(
-            `${CronType.ORDER}${cronId}: 등록상품명`,
-            exposedProductName,
-            processedProductName,
-          );
+          console.log(`${CronType.ORDER}${cronId}: 등록상품명`, exposedProductName);
           console.log(`${CronType.ORDER}${cronId}: 노출상품명`, item.vendorItemName);
 
           if (exposedProductName !== item.vendorItemName.trim())
-            if (!item.vendorItemName.includes(processedProductName))
-              if (
-                !item.vendorItemName.includes(
-                  this.utilService.removeFirstWord(processedProductName),
-                )
-              )
-                throw new Error(
-                  `${CronType.ERROR}${CronType.ORDER}${cronId}: 노출상품명 확인이 필요합니다. 발주를 보류합니다.`,
-                );
+            if (!exposedProductName.includes(item.vendorItemName.split(',')[0].trim()))
+              throw new Error(
+                `${CronType.ERROR}${CronType.ORDER}${cronId}: 노출상품명 확인이 필요합니다. 발주를 보류합니다.`,
+              );
 
           // 상품검색
           await onchPage.type('#prd_sear_txt', searchQuery, { delay: 100 });
